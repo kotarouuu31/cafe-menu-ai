@@ -13,6 +13,21 @@ export interface Menu {
   updatedAt: Date;
 }
 
+export interface MenuDB {
+  id: string;
+  name: string;
+  description: string;
+  ingredients: string; // JSON string
+  allergens: string;   // JSON string
+  keywords: string;    // JSON string
+  imageUrls: string;   // JSON string
+  price?: number;
+  category: string;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CreateMenuInput {
   name: string;
   description: string;

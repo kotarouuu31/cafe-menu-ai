@@ -6,18 +6,18 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Menu {
   id          String   @id @default(cuid())
   name        String
   description String
-  ingredients String[]
-  allergens   String[]
-  keywords    String[]
-  imageUrls   String[]
+  ingredients String   // JSON string
+  allergens   String   // JSON string
+  keywords    String   // JSON string
+  imageUrls   String   // JSON string
   price       Int?
   category    String
   active      Boolean  @default(true)

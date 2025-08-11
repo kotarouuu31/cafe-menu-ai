@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { Menu, MenuDB } from '@/types/menu'
 
 const createMenuSchema = z.object({
   name: z.string().min(1),
@@ -18,19 +19,32 @@ const updateMenuSchema = createMenuSchema.partial().extend({
   active: z.boolean().optional(),
 })
 
+// データベースからのデータを配列形式に変換
+function convertDbToMenu(dbMenu: MenuDB): Menu {
+  return {
+    ...dbMenu,
+    ingredients: JSON.parse(dbMenu.ingredients || '[]'),
+    allergens: JSON.parse(dbMenu.allergens || '[]'),
+    keywords: JSON.parse(dbMenu.keywords || '[]'),
+    imageUrls: JSON.parse(dbMenu.imageUrls || '[]'),
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const active = searchParams.get('active')
     
-    const menus = await prisma.menu.findMany({
+    const dbMenus = await prisma.menu.findMany({
       where: {
         ...(category && { category }),
         ...(active !== null && { active: active === 'true' }),
       },
       orderBy: { createdAt: 'desc' },
-    })
+    }) as MenuDB[]
+    
+    const menus = dbMenus.map(convertDbToMenu)
     
     return NextResponse.json(menus)
   } catch (error) {
@@ -47,9 +61,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = createMenuSchema.parse(body)
     
-    const menu = await prisma.menu.create({
-      data: validatedData,
-    })
+    // 配列データをJSON文字列に変換
+    const dbData = {
+      ...validatedData,
+      ingredients: JSON.stringify(validatedData.ingredients),
+      allergens: JSON.stringify(validatedData.allergens),
+      keywords: JSON.stringify(validatedData.keywords),
+      imageUrls: JSON.stringify(validatedData.imageUrls),
+    }
+    
+    const dbMenu = await prisma.menu.create({
+      data: dbData,
+    }) as MenuDB
+    
+    const menu = convertDbToMenu(dbMenu)
     
     return NextResponse.json(menu, { status: 201 })
   } catch (error) {
@@ -74,10 +99,27 @@ export async function PUT(request: NextRequest) {
     const validatedData = updateMenuSchema.parse(body)
     const { id, ...updateData } = validatedData
     
-    const menu = await prisma.menu.update({
+    // 配列データをJSON文字列に変換
+    const dbUpdateData: any = { ...updateData }
+    if (updateData.ingredients) {
+      dbUpdateData.ingredients = JSON.stringify(updateData.ingredients)
+    }
+    if (updateData.allergens) {
+      dbUpdateData.allergens = JSON.stringify(updateData.allergens)
+    }
+    if (updateData.keywords) {
+      dbUpdateData.keywords = JSON.stringify(updateData.keywords)
+    }
+    if (updateData.imageUrls) {
+      dbUpdateData.imageUrls = JSON.stringify(updateData.imageUrls)
+    }
+    
+    const dbMenu = await prisma.menu.update({
       where: { id },
-      data: updateData,
-    })
+      data: dbUpdateData,
+    }) as MenuDB
+    
+    const menu = convertDbToMenu(dbMenu)
     
     return NextResponse.json(menu)
   } catch (error) {

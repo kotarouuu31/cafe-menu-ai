@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# Google Cloud service account keys
+*.json
+!package*.json
+!tsconfig*.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*

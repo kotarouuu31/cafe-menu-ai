@@ -1,43 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const analyzeImageSchema = z.object({
-  imageUrl: z.string().url(),
-  imageData: z.string().optional(), // Base64 encoded image data
+  imageData: z.string().min(1, '画像データは必須です'), // Base64 encoded image data
 })
+
+// モック画像解析：ランダムなキーワードを返す
+function mockImageAnalysis(): { detectedItems: string[]; confidence: number } {
+  const possibleItems = [
+    // 日本語キーワード
+    ['チョコレート', 'ケーキ', 'デザート'],
+    ['コーヒー', 'ラテ', 'ドリンク'],
+    ['サンドイッチ', 'パン', 'フード'],
+    ['チキン', 'ベーコン', 'サンドイッチ'],
+    ['ミルク', 'コーヒー', 'ラテ'],
+    // 英語キーワード
+    ['chocolate', 'cake', 'dessert'],
+    ['coffee', 'latte', 'drink'],
+    ['sandwich', 'bread', 'food'],
+    ['chicken', 'bacon', 'sandwich'],
+    ['milk', 'coffee', 'latte'],
+  ]
+  
+  // ランダムにキーワードセットを選択
+  const randomIndex = Math.floor(Math.random() * possibleItems.length)
+  const detectedItems = possibleItems[randomIndex]
+  
+  // 信頼度もランダムに生成（0.7-0.95の範囲）
+  const confidence = Math.random() * 0.25 + 0.7
+  
+  return {
+    detectedItems,
+    confidence: Math.round(confidence * 100) / 100,
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = analyzeImageSchema.parse(body)
     
-    // TODO: Implement actual AI image analysis
-    // For now, return mock data
-    const mockAnalysis = {
-      detectedItems: ['coffee', 'sandwich', 'cake'],
-      confidence: 0.85,
-      suggestedMenus: [],
-    }
+    // 画像解析処理をシミュレート（少し待機）
+    await new Promise(resolve => setTimeout(resolve, 1500))
     
-    // Search for menus that match detected items
-    const suggestedMenus = await prisma.menu.findMany({
-      where: {
-        active: true,
-        OR: mockAnalysis.detectedItems.map(item => ({
-          OR: [
-            { name: { contains: item, mode: 'insensitive' } },
-            { keywords: { has: item } },
-            { ingredients: { has: item } },
-          ],
-        })),
+    // モック画像解析を実行
+    const analysisResult = mockImageAnalysis()
+    
+    // メニュー検索APIを呼び出し
+    const searchResponse = await fetch(`${request.nextUrl.origin}/api/search-menu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      take: 5,
+      body: JSON.stringify({
+        keywords: analysisResult.detectedItems,
+      }),
     })
     
+    let suggestedMenus = []
+    if (searchResponse.ok) {
+      const searchResult = await searchResponse.json()
+      suggestedMenus = searchResult.menus || []
+    }
+    
     const result = {
-      ...mockAnalysis,
+      detectedItems: analysisResult.detectedItems,
+      confidence: analysisResult.confidence,
       suggestedMenus,
+      analysisTime: new Date().toISOString(),
     }
     
     return NextResponse.json(result)

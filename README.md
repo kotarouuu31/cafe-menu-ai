@@ -6,7 +6,8 @@ AI搭載のカフェメニュー認識アプリケーション。顧客がカメ
 
 - **フロントエンド**: Next.js 14, TypeScript, Tailwind CSS
 - **バックエンド**: Next.js API Routes
-- **データベース**: PostgreSQL + Prisma ORM
+- **データベース**: SQLite (開発) / PostgreSQL (本番) + Prisma ORM
+- **AI画像解析**: Google Cloud Vision API
 - **フォーム管理**: React Hook Form + Zod
 - **UI コンポーネント**: Lucide React Icons
 - **開発ツール**: ESLint, Prettier
@@ -45,12 +46,49 @@ npm install
 cp env.template .env.local
 ```
 
-`.env.local`ファイルを編集して、データベース接続情報を設定してください：
+`.env.local`ファイルを編集して、データベース接続情報とGoogle Vision API設定を行ってください：
+
+#### SQLite（開発環境）
 ```env
-DATABASE_URL="postgresql://username:password@localhost:5432/cafe_menu_ai"
+DATABASE_URL="file:./dev.db"
+
+#### Google Cloud Vision API設定
+```env
+GOOGLE_CLOUD_PROJECT_ID="your-google-cloud-project-id"
+GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour-private-key-here\n-----END PRIVATE KEY-----"
+GOOGLE_CLOUD_CLIENT_EMAIL="your-service-account@your-project.iam.gserviceaccount.com"
 ```
 
-### 4. データベースのセットアップ
+### 4. Google Cloud Vision API セットアップ（オプション）
+
+本格的なAI画像認識を使用する場合は、Google Cloud Vision APIを設定してください。設定しない場合はモックデータで動作します。
+
+#### 4.1 Google Cloud Console でプロジェクト作成
+1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+2. 新しいプロジェクトを作成（例：`cafe-menu-ai`）
+3. プロジェクトを選択
+
+#### 4.2 Vision API の有効化
+1. 左メニュー「APIとサービス」→「ライブラリ」
+2. 「Cloud Vision API」を検索
+3. 「有効にする」をクリック
+
+#### 4.3 サービスアカウント作成
+1. 「APIとサービス」→「認証情報」
+2. 「認証情報を作成」→「サービスアカウント」
+3. 名前: `cafe-menu-ai-vision`
+4. 役割: `Cloud Vision API ユーザー`
+
+#### 4.4 サービスアカウントキー作成
+1. 作成したサービスアカウントをクリック
+2. 「キー」タブ→「キーを追加」→「新しいキーを作成」
+3. 形式: JSON を選択
+4. ダウンロードしたJSONファイルから以下の情報を`.env.local`に設定：
+   - `project_id` → `GOOGLE_CLOUD_PROJECT_ID`
+   - `private_key` → `GOOGLE_CLOUD_PRIVATE_KEY`
+   - `client_email` → `GOOGLE_CLOUD_CLIENT_EMAIL`
+
+### 5. データベースのセットアップ
 ```bash
 # Prismaクライアントの生成
 npx prisma generate
@@ -62,12 +100,12 @@ npx prisma migrate dev --name init
 npx prisma db seed
 ```
 
-### 5. 開発サーバーの起動
+### 6. 開発サーバーの起動
 ```bash
 npm run dev
 ```
 
-ブラウザで [http://localhost:3000](http://localhost:3000) を開いてアプリケーションを確認してください。
+ブラウザで [http://localhost:3001](http://localhost:3001) を開いてアプリケーションを確認してください。
 
 ## 📁 プロジェクト構造
 

@@ -48,4 +48,6 @@ export interface ImageAnalysisResult {
   detectedItems: string[];
   confidence: number;
   suggestedMenus: Menu[];
+  analysisTime?: string;
+  usingVisionAPI?: boolean;
 }

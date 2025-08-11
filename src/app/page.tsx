@@ -19,16 +19,35 @@ export default function Home() {
   const startCamera = useCallback(async () => {
     try {
       setCameraError(null)
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      })
+      // より広い互換性のためのカメラ設定
+      const constraints = {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      }
+      
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream
+        // 明示的にplay()を呼び出し
+        await videoRef.current.play()
       }
       setStream(mediaStream)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accessing camera:', error)
-      setCameraError('カメラへのアクセスに失敗しました。ブラウザの設定でカメラの使用を許可してください。')
+      // より詳細なエラーメッセージ
+      let errorMessage = 'カメラへのアクセスに失敗しました。'
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'ブラウザの設定でカメラの使用を許可してください。'
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'カメラが見つかりません。'
+      } else {
+        errorMessage += 'ファイルアップロードをお試しください。'
+      }
+      setCameraError(errorMessage)
     }
   }, [])
 
@@ -149,8 +168,8 @@ export default function Home() {
                   <div className="relative">
                     <video
                       ref={videoRef}
-                      autoPlay
                       playsInline
+                      muted
                       className="w-full rounded-lg shadow-md"
                     />
                     <button
@@ -249,6 +268,17 @@ export default function Home() {
                 <span className="text-sm text-gray-500">
                   信頼度: {Math.round(analysisResult.confidence * 100)}%
                 </span>
+              </div>
+              
+              {/* デバッグ情報 */}
+              <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                <div className="font-medium text-gray-700 mb-1">🔍 デバッグ情報</div>
+                <div className="text-gray-600">
+                  <div>Vision API使用: {analysisResult.usingVisionAPI ? 'はい' : 'いいえ (モック)'}</div>
+                  <div>解析時刻: {analysisResult.analysisTime ? new Date(analysisResult.analysisTime).toLocaleTimeString() : 'N/A'}</div>
+                  <div>検出キーワード数: {analysisResult.detectedItems.length}個</div>
+                  <div>マッチしたメニュー数: {analysisResult.suggestedMenus.length}個</div>
+                </div>
               </div>
               
               {analysisResult.detectedItems.length > 0 && (

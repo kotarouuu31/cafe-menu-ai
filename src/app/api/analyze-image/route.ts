@@ -11,27 +11,31 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 
 // モック画像解析：Google Vision APIが利用できない場合のフォールバック
 function mockImageAnalysis(): { detectedItems: string[]; confidence: number } {
-  const possibleItems = [
-    // 日本語キーワード
-    ['チョコレート', 'ケーキ', 'デザート'],
-    ['コーヒー', 'ラテ', 'ドリンク'],
-    ['サンドイッチ', 'パン', 'フード'],
-    ['チキン', 'ベーコン', 'サンドイッチ'],
-    ['ミルク', 'コーヒー', 'ラテ'],
-    // 英語キーワード
-    ['chocolate', 'cake', 'dessert'],
-    ['coffee', 'latte', 'drink'],
-    ['sandwich', 'bread', 'food'],
-    ['chicken', 'bacon', 'sandwich'],
-    ['milk', 'coffee', 'latte'],
+  // 現在登録されているメニューに対応するキーワードセット
+  const menuBasedKeywords = [
+    // ガトーショコラ用
+    ['チョコレート', 'ケーキ', 'デザート', 'chocolate', 'cake'],
+    ['チョコ', 'スイーツ', 'ケーキ', 'dessert'],
+    
+    // カフェラテ用
+    ['コーヒー', 'ラテ', 'ドリンク', 'coffee', 'latte'],
+    ['ミルク', 'エスプレッソ', 'milk', 'espresso'],
+    
+    // クラブハウスサンドイッチ用
+    ['サンドイッチ', 'チキン', 'ベーコン', 'sandwich', 'chicken'],
+    ['パン', 'レタス', 'トマト', 'bread', 'bacon'],
+    
+    // 一般的な食べ物
+    ['food', '食べ物', 'フード'],
+    ['drink', '飲み物', 'ドリンク'],
   ]
   
   // ランダムにキーワードセットを選択
-  const randomIndex = Math.floor(Math.random() * possibleItems.length)
-  const detectedItems = possibleItems[randomIndex]
+  const randomIndex = Math.floor(Math.random() * menuBasedKeywords.length)
+  const detectedItems = menuBasedKeywords[randomIndex]
   
-  // 信頼度もランダムに生成（0.7-0.95の範囲）
-  const confidence = Math.random() * 0.25 + 0.7
+  // 信頼度を0.8-0.95の範囲で生成（より高い信頼度）
+  const confidence = Math.random() * 0.15 + 0.8
   
   return {
     detectedItems,

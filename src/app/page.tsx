@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Camera, Upload, Loader2, RotateCcw, Sparkles, AlertCircle } from 'lucide-react'
 import { ImageAnalysisResult } from '@/types/menu'
 import { formatPrice } from '@/lib/utils'
@@ -22,64 +22,92 @@ export default function Home() {
       console.log('=== カメラ起動開始 ===')
       
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: true
+        video: {
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 }
+        }
       })
       
       console.log('✅ ストリーム取得成功')
+      setStream(mediaStream)
       
-      if (videoRef.current) {
-        const video = videoRef.current
-        console.log('📺 Video要素にストリーム設定')
-        video.srcObject = mediaStream
-        
-        // 複数のタイミングで自動再生を試行
-        const attemptAutoPlay = async () => {
-          try {
-            await video.play()
-            console.log('✅ 自動再生成功')
-            return true
-          } catch (error: any) {
-            console.log('自動再生失敗:', error.message)
-            return false
-          }
-        }
-        
-        // 1. 即座に試行
-        const immediateSuccess = await attemptAutoPlay()
-        
-        if (!immediateSuccess) {
-          // 2. loadedmetadata後に試行
-          video.onloadedmetadata = async () => {
-            console.log('📺 メタデータ読み込み完了')
-            const metadataSuccess = await attemptAutoPlay()
-            
-            if (!metadataSuccess) {
-              // 3. 短い遅延後に試行
-              setTimeout(async () => {
-                const delayedSuccess = await attemptAutoPlay()
-                if (!delayedSuccess) {
-                  console.log('⚠️ 自動再生に失敗しました。手動操作が必要です。')
-                }
-              }, 500)
-            }
-          }
-          
-          // 4. canplay後にも試行
-          video.oncanplay = async () => {
-            console.log('🎥 Can play')
-            await attemptAutoPlay()
-          }
-        }
+      // video要素の準備を確実に待つ
+      console.log('📺 Video要素の準備確認中...')
+      let retryCount = 0
+      while (!videoRef.current && retryCount < 10) {
+        console.log(`⏳ Video要素待機中... (${retryCount + 1}/10)`)
+        await new Promise(resolve => setTimeout(resolve, 100))
+        retryCount++
       }
       
-      setStream(mediaStream)
-      console.log('🎉 カメラセットアップ完了')
+      if (videoRef.current) {
+        // 完全リセットボタンと全く同じロジックを実行
+        console.log('🔄 完全リセット実行（初回起動）')
+        
+        const video = videoRef.current
+        
+        // 完全リセット
+        video.srcObject = null
+        await new Promise(resolve => setTimeout(resolve, 200))
+        video.srcObject = mediaStream
+        
+        // 再生試行
+        setTimeout(async () => {
+          if (videoRef.current) {
+            try {
+              await videoRef.current.play()
+              console.log('✅ リセット後再生成功')
+            } catch (error) {
+              console.log('リセット後再生失敗、継続試行中...')
+              
+              // 追加の再生試行
+              setTimeout(async () => {
+                if (videoRef.current) {
+                  try {
+                    await videoRef.current.play()
+                    console.log('✅ 追加試行で再生成功')
+                  } catch (error2) {
+                    console.log('追加試行も失敗、手動操作が必要')
+                  }
+                }
+              }, 1000)
+            }
+          }
+        }, 500)
+      } else {
+        console.error('❌ Video要素が準備できませんでした')
+        setCameraError('Video要素の初期化に失敗しました。ページを再読み込みしてください。')
+      }
+      
+      console.log('🎉 カメラ初期化完了')
       
     } catch (error: any) {
       console.error('💥 カメラエラー:', error)
-      setCameraError(`カメラアクセスエラー: ${error.message}`)
+      setCameraError(`カメラエラー: ${error.message}`)
     }
   }, [])
+
+  // コンポーネントマウント時の初期化とクリーンアップ
+  useEffect(() => {
+    // コンポーネントマウント時にvideo要素の初期状態を確認
+    if (videoRef.current) {
+      console.log('📺 Video element mounted')
+      const video = videoRef.current
+      
+      // video要素の基本設定を確実に適用
+      video.playsInline = true
+      video.muted = true
+      video.autoplay = true
+      video.controls = false
+    }
+    
+    return () => {
+      // クリーンアップ
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [stream])
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -209,40 +237,41 @@ export default function Home() {
                       playsInline
                       muted
                       autoPlay
+                      controls={false}
                       className="w-full h-64 rounded-lg shadow-md"
                       style={{
                         minHeight: '200px',
                         maxHeight: '400px',
-                        objectFit: 'cover'
+                        objectFit: 'cover',
+                        backgroundColor: '#f3f4f6'
                       }}
-                      onLoadedData={async () => {
-                        console.log('🎥 Video data loaded')
-                        if (videoRef.current && videoRef.current.paused) {
-                          try {
-                            await videoRef.current.play()
-                            console.log('✅ onLoadedData後の再生成功')
-                          } catch (error) {
-                            console.log('onLoadedData後の再生失敗')
-                          }
+                      onLoadedMetadata={() => {
+                        console.log('🎭 Metadata event')
+                        if (videoRef.current) {
+                          console.log('Video実寸法:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
                         }
                       }}
-                      onCanPlay={async () => {
-                        console.log('🎥 Can play')
-                        if (videoRef.current && videoRef.current.paused) {
-                          try {
-                            await videoRef.current.play()
-                            console.log('✅ onCanPlay後の再生成功')
-                          } catch (error) {
-                            console.log('onCanPlay後の再生失敗')
-                          }
-                        }
+                      onLoadedData={() => {
+                        console.log('📊 Data loaded event')
+                      }}
+                      onCanPlay={() => {
+                        console.log('▶️ CanPlay event')
+                      }}
+                      onPlay={() => {
+                        console.log('🎬 Play event')
                       }}
                       onPlaying={() => {
-                        console.log('🎥 Playing - 再生開始!')
+                        console.log('🎥 Playing event')
+                      }}
+                      onTimeUpdate={() => {
+                        // 初回のみログ出力
+                        if (videoRef.current && videoRef.current.currentTime < 0.1) {
+                          console.log('⏱️ Time update - 映像流れ始め')
+                        }
                       }}
                       onError={(e) => {
-                        console.error('🎥 Video error:', e)
-                        setCameraError('ビデオ表示エラーが発生しました')
+                        console.error('❌ Video element error:', e)
+                        setCameraError('ビデオ要素エラーが発生しました')
                       }}
                     />
                     <button
@@ -279,53 +308,73 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* デバッグ情報 - 問題がある場合のみ表示 */}
-                {stream && videoRef.current && (
-                  videoRef.current.videoWidth === 0 || 
-                  videoRef.current.videoHeight === 0 || 
-                  videoRef.current.paused
-                ) && (
-                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                    <div className="text-sm text-yellow-800 mb-2">⚠️ カメラ調整が必要</div>
-                    <div className="space-y-1 text-xs text-yellow-700 mb-2">
-                      <div>ストリーム: ✅ アクティブ</div>
-                      <div>Video寸法: {videoRef.current?.videoWidth || 0}x{videoRef.current?.videoHeight || 0}</div>
-                      <div>再生状態: {videoRef.current?.paused ? '⏸️ 停止中' : '▶️ 再生中'}</div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <button
-                        onClick={async () => {
-                          if (videoRef.current) {
-                            try {
-                              await videoRef.current.play()
-                              console.log('✅ 手動再生成功')
-                            } catch (error) {
-                              console.error('❌ 手動再生失敗:', error)
-                            }
-                          }
-                        }}
-                        className="w-full px-3 py-1 bg-green-200 text-green-800 rounded text-xs"
-                      >
-                        ▶️ カメラを開始
-                      </button>
+                {/* デバッグパネル - 問題検出時のみ表示 */}
+                {stream && (() => {
+                  const video = videoRef.current
+                  const hasIssue = !video || 
+                    video.videoWidth === 0 || 
+                    video.videoHeight === 0 || 
+                    (video.paused && video.currentTime === 0)
+                  
+                  return hasIssue ? (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="text-sm text-yellow-800 mb-2">⚠️ カメラ調整が必要</div>
+                      <div className="space-y-1 text-xs text-yellow-700 mb-3">
+                        <div>ストリーム: ✅ 取得済み</div>
+                        <div>Video寸法: {video?.videoWidth || 0} x {video?.videoHeight || 0}</div>
+                        <div>再生状態: {video?.paused ? '⏸️ 停止' : '▶️ 再生中'}</div>
+                        <div>時間: {video?.currentTime.toFixed(1) || 0}秒</div>
+                      </div>
                       
-                      <button
-                        onClick={() => {
-                          if (videoRef.current && stream) {
-                            videoRef.current.srcObject = null
-                            setTimeout(() => {
-                              if (videoRef.current) videoRef.current.srcObject = stream
-                            }, 100)
-                          }
-                        }}
-                        className="w-full px-3 py-1 bg-blue-200 text-blue-800 rounded text-xs"
-                      >
-                        🔄 リセット
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          onClick={async () => {
+                            if (videoRef.current) {
+                              console.log('🔄 手動再生実行')
+                              try {
+                                await videoRef.current.play()
+                                console.log('✅ 手動再生成功')
+                              } catch (error) {
+                                console.error('❌ 手動再生失敗:', error)
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
+                        >
+                          ▶️ カメラを開始
+                        </button>
+                        
+                        <button
+                          onClick={async () => {
+                            if (videoRef.current && stream) {
+                              console.log('🔄 完全リセット実行')
+                              
+                              // 完全リセット
+                              videoRef.current.srcObject = null
+                              await new Promise(resolve => setTimeout(resolve, 200))
+                              videoRef.current.srcObject = stream
+                              
+                              // 再生試行
+                              setTimeout(async () => {
+                                if (videoRef.current) {
+                                  try {
+                                    await videoRef.current.play()
+                                    console.log('✅ リセット後再生成功')
+                                  } catch (error) {
+                                    console.log('リセット後再生失敗')
+                                  }
+                                }
+                              }, 500)
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                        >
+                          🔄 完全リセット
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : null
+                })()}
                 
                 <input
                   ref={fileInputRef}

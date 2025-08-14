@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    console.error('Error creating menu:', error)
+    const err = error as Error
+    console.error('Menu creation error:', err)
     return NextResponse.json(
       { error: 'Failed to create menu' },
       { status: 500 }

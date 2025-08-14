@@ -198,7 +198,7 @@ export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<Visio
     console.log('🏷️ 検出されたラベル数:', labels.length)
     
     // 食べ物関連のラベルのみをフィルタリング
-    const foodLabels = labels.filter((label: any) => 
+    const foodLabels = labels.filter((label: { description?: string }) => 
       label.description && isFoodRelated(label.description)
     )
     
@@ -206,7 +206,7 @@ export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<Visio
     
     // 日本語キーワードに変換
     const detectedItems: string[] = []
-    const detectedLabels = foodLabels.map((label: any) => {
+    const detectedLabels = foodLabels.map((label: { description?: string; score?: number }) => {
       const description = label.description || ''
       const score = label.score || 0
       const confidence = score // Vision APIではscoreがconfidenceと同じ
@@ -229,7 +229,7 @@ export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<Visio
     
     // 平均信頼度を計算
     const averageConfidence = detectedLabels.length > 0
-      ? detectedLabels.reduce((sum: number, label: any) => sum + label.confidence, 0) / detectedLabels.length
+      ? detectedLabels.reduce((sum: number, label: { confidence: number }) => sum + label.confidence, 0) / detectedLabels.length
       : 0
     
     console.log('✅ Vision API解析完了')
@@ -241,8 +241,9 @@ export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<Visio
       detectedItems: uniqueDetectedItems,
       confidence: averageConfidence,
     }
-  } catch (error: any) {
-    console.error('💥 Google Vision API error:', error)
-    throw new Error(`Failed to analyze image with Google Vision API: ${error.message}`)
+  } catch (error: unknown) {
+    const err = error as Error
+    console.error('💥 Google Vision API error:', err)
+    throw new Error(`Failed to analyze image with Google Vision API: ${err.message}`)
   }
 }

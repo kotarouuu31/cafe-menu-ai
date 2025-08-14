@@ -57,7 +57,7 @@ export default function Home() {
             try {
               await videoRef.current.play()
               console.log('✅ リセット後再生成功')
-            } catch (error) {
+            } catch (playError) {
               console.log('リセット後再生失敗、継続試行中...')
               
               // 追加の再生試行
@@ -66,7 +66,7 @@ export default function Home() {
                   try {
                     await videoRef.current.play()
                     console.log('✅ 追加試行で再生成功')
-                  } catch (error2) {
+                  } catch (playError2) {
                     console.log('追加試行も失敗、手動操作が必要')
                   }
                 }
@@ -81,8 +81,9 @@ export default function Home() {
       
       console.log('🎉 カメラ初期化完了')
       
-    } catch (error: any) {
-      console.error('💥 カメラエラー:', error)
+    } catch (cameraError) {
+      console.error('Camera error:', cameraError)
+      const error = cameraError as Error
       setCameraError(`カメラエラー: ${error.message}`)
     }
   }, [])
@@ -183,8 +184,8 @@ export default function Home() {
         const errorData = await response.json()
         setError(errorData.error || '画像解析に失敗しました')
       }
-    } catch (error) {
-      console.error('Error analyzing image:', error)
+    } catch (playError) {
+      console.error('Video play error:', playError)
       setError('ネットワークエラーが発生しました。もう一度お試しください。')
     } finally {
       setIsAnalyzing(false)

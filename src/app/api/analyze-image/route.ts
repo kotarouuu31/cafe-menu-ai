@@ -59,10 +59,11 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
-    } catch (error) {
+    } catch (analysisError) {
+      console.error('画像解析エラー:', analysisError)
       return NextResponse.json(
-        { error: '無効な画像データです。' },
-        { status: 400 }
+        { error: '画像解析に失敗しました' },
+        { status: 500 }
       )
     }
     
@@ -110,16 +111,17 @@ export async function POST(request: NextRequest) {
           confidence: Math.round(l.confidence * 100)
         }))
         
-      } catch (visionError: any) {
+      } catch (visionError: unknown) {
         console.error('=== Google Vision API エラー詳細 ===')
-        console.error('エラータイプ:', typeof visionError)
-        console.error('エラーメッセージ:', visionError?.message)
-        console.error('エラースタック:', visionError?.stack)
+        const error = visionError as Error
+        console.error('エラータイプ:', typeof error)
+        console.error('エラーメッセージ:', error?.message)
+        console.error('エラースタック:', error?.stack)
         
         debugInfo.visionError = {
-          name: visionError?.name || 'Unknown',
-          message: visionError?.message || 'Unknown error',
-          type: typeof visionError
+          name: error?.name || 'Unknown',
+          message: error?.message || 'Unknown error',
+          type: typeof error
         }
         
         // Vision APIエラー時はモックにフォールバック

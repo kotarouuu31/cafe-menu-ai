@@ -27,7 +27,7 @@ export default function NewMenuPage() {
   const [newIngredient, setNewIngredient] = useState('')
   const [newAllergen, setNewAllergen] = useState('')
   const [newKeyword, setNewKeyword] = useState('')
-  const [newImageUrl, setNewImageUrl] = useState('')
+  // const [newImageUrl, setNewImageUrl] = useState('')
 
   const {
     register,
@@ -46,9 +46,7 @@ export default function NewMenuPage() {
   })
 
   const ingredients = watch('ingredients')
-  const allergens = watch('allergens')
-  const keywords = watch('keywords')
-  const imageUrls = watch('imageUrls')
+  const { allergens, keywords, /* imageUrls, */ ...menuData } = watch()
 
   const addItem = (
     type: 'ingredients' | 'allergens' | 'keywords' | 'imageUrls',

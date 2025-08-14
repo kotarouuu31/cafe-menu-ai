@@ -21,23 +21,53 @@ export default function Home() {
       setCameraError(null)
       console.log('=== カメラ起動開始 ===')
       
-      // 最もシンプルな設定
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: true
       })
       
       console.log('✅ ストリーム取得成功')
-      console.log('トラック数:', mediaStream.getTracks().length)
       
       if (videoRef.current) {
+        const video = videoRef.current
         console.log('📺 Video要素にストリーム設定')
-        videoRef.current.srcObject = mediaStream
+        video.srcObject = mediaStream
         
-        // loadedmetadataイベントを待つ
-        videoRef.current.onloadedmetadata = () => {
-          console.log('📺 メタデータ読み込み完了')
-          if (videoRef.current) {
-            console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+        // 複数のタイミングで自動再生を試行
+        const attemptAutoPlay = async () => {
+          try {
+            await video.play()
+            console.log('✅ 自動再生成功')
+            return true
+          } catch (error: any) {
+            console.log('自動再生失敗:', error.message)
+            return false
+          }
+        }
+        
+        // 1. 即座に試行
+        const immediateSuccess = await attemptAutoPlay()
+        
+        if (!immediateSuccess) {
+          // 2. loadedmetadata後に試行
+          video.onloadedmetadata = async () => {
+            console.log('📺 メタデータ読み込み完了')
+            const metadataSuccess = await attemptAutoPlay()
+            
+            if (!metadataSuccess) {
+              // 3. 短い遅延後に試行
+              setTimeout(async () => {
+                const delayedSuccess = await attemptAutoPlay()
+                if (!delayedSuccess) {
+                  console.log('⚠️ 自動再生に失敗しました。手動操作が必要です。')
+                }
+              }, 500)
+            }
+          }
+          
+          // 4. canplay後にも試行
+          video.oncanplay = async () => {
+            console.log('🎥 Can play')
+            await attemptAutoPlay()
           }
         }
       }
@@ -178,20 +208,37 @@ export default function Home() {
                       ref={videoRef}
                       playsInline
                       muted
+                      autoPlay
                       className="w-full h-64 rounded-lg shadow-md"
                       style={{
                         minHeight: '200px',
                         maxHeight: '400px',
                         objectFit: 'cover'
                       }}
-                      onLoadedMetadata={() => {
-                        console.log('🎥 Metadata loaded')
-                        if (videoRef.current) {
-                          console.log('📺 Video寸法:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+                      onLoadedData={async () => {
+                        console.log('🎥 Video data loaded')
+                        if (videoRef.current && videoRef.current.paused) {
+                          try {
+                            await videoRef.current.play()
+                            console.log('✅ onLoadedData後の再生成功')
+                          } catch (error) {
+                            console.log('onLoadedData後の再生失敗')
+                          }
                         }
                       }}
-                      onCanPlay={() => {
+                      onCanPlay={async () => {
                         console.log('🎥 Can play')
+                        if (videoRef.current && videoRef.current.paused) {
+                          try {
+                            await videoRef.current.play()
+                            console.log('✅ onCanPlay後の再生成功')
+                          } catch (error) {
+                            console.log('onCanPlay後の再生失敗')
+                          }
+                        }
+                      }}
+                      onPlaying={() => {
+                        console.log('🎥 Playing - 再生開始!')
                       }}
                       onError={(e) => {
                         console.error('🎥 Video error:', e)
@@ -232,28 +279,25 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* デバッグ用ボタン - 一時的 */}
-                {stream && (
+                {/* デバッグ情報 - 問題がある場合のみ表示 */}
+                {stream && videoRef.current && (
+                  videoRef.current.videoWidth === 0 || 
+                  videoRef.current.videoHeight === 0 || 
+                  videoRef.current.paused
+                ) && (
                   <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                    <div className="text-sm text-yellow-800 mb-2">🔧 デバッグ情報</div>
-                    <div className="space-y-1 text-xs text-yellow-700">
-                      <div>ストリーム: {stream ? '✅ アクティブ' : '❌ なし'}</div>
-                      <div>トラック数: {stream?.getTracks().length || 0}</div>
-                      {videoRef.current && (
-                        <>
-                          <div>Video寸法: {videoRef.current.videoWidth || 'N/A'}x{videoRef.current.videoHeight || 'N/A'}</div>
-                          <div>再生状態: {videoRef.current.paused ? '⏸️ 停止' : '▶️ 再生中'}</div>
-                          <div>Current時間: {videoRef.current.currentTime.toFixed(2)}秒</div>
-                        </>
-                      )}
+                    <div className="text-sm text-yellow-800 mb-2">⚠️ カメラ調整が必要</div>
+                    <div className="space-y-1 text-xs text-yellow-700 mb-2">
+                      <div>ストリーム: ✅ アクティブ</div>
+                      <div>Video寸法: {videoRef.current?.videoWidth || 0}x{videoRef.current?.videoHeight || 0}</div>
+                      <div>再生状態: {videoRef.current?.paused ? '⏸️ 停止中' : '▶️ 再生中'}</div>
                     </div>
                     
-                    <div className="mt-2 space-y-1">
+                    <div className="space-y-1">
                       <button
                         onClick={async () => {
                           if (videoRef.current) {
                             try {
-                              console.log('🔄 手動再生試行')
                               await videoRef.current.play()
                               console.log('✅ 手動再生成功')
                             } catch (error) {
@@ -263,34 +307,21 @@ export default function Home() {
                         }}
                         className="w-full px-3 py-1 bg-green-200 text-green-800 rounded text-xs"
                       >
-                        ▶️ 手動再生
+                        ▶️ カメラを開始
                       </button>
                       
                       <button
                         onClick={() => {
                           if (videoRef.current && stream) {
-                            console.log('🔄 ストリーム再設定')
                             videoRef.current.srcObject = null
                             setTimeout(() => {
-                              if (videoRef.current) {
-                                videoRef.current.srcObject = stream
-                              }
+                              if (videoRef.current) videoRef.current.srcObject = stream
                             }, 100)
                           }
                         }}
                         className="w-full px-3 py-1 bg-blue-200 text-blue-800 rounded text-xs"
                       >
-                        🔄 ストリーム再設定
-                      </button>
-                      
-                      <button
-                        onClick={() => {
-                          stopCamera()
-                          console.log('🛑 カメラ停止')
-                        }}
-                        className="w-full px-3 py-1 bg-red-200 text-red-800 rounded text-xs"
-                      >
-                        🛑 カメラ停止
+                        🔄 リセット
                       </button>
                     </div>
                   </div>

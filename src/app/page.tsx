@@ -21,93 +21,33 @@ export default function Home() {
       setCameraError(null)
       console.log('=== カメラ起動開始 ===')
       
-      // 段階的制約設定（Macに最適化）
-      const constraintOptions = [
-        // 1. 基本設定
-        { video: true },
-        // 2. 詳細設定
-        {
-          video: {
-            width: { ideal: 640, max: 1280 },
-            height: { ideal: 480, max: 720 },
-            frameRate: { ideal: 30 }
-          }
-        },
-        // 3. 背面カメラ
-        {
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }
-        }
-      ]
+      // 最もシンプルな設定
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: true
+      })
       
-      let mediaStream: MediaStream | null = null
-      
-      for (let i = 0; i < constraintOptions.length; i++) {
-        try {
-          console.log(`🎥 制約 ${i + 1} を試行:`, constraintOptions[i])
-          mediaStream = await navigator.mediaDevices.getUserMedia(constraintOptions[i])
-          console.log(`✅ 制約 ${i + 1} 成功! トラック数:`, mediaStream.getTracks().length)
-          
-          // ストリーム情報をログ出力
-          mediaStream.getTracks().forEach((track, index) => {
-            console.log(`📹 Track ${index}:`, track.kind, track.label, track.getSettings())
-          })
-          
-          break
-        } catch (error) {
-          console.log(`❌ 制約 ${i + 1} 失敗:`, error)
-        }
-      }
-      
-      if (!mediaStream) {
-        throw new Error('カメラストリームの取得に失敗しました')
-      }
+      console.log('✅ ストリーム取得成功')
+      console.log('トラック数:', mediaStream.getTracks().length)
       
       if (videoRef.current) {
-        const video = videoRef.current
-        console.log('📺 Video element 情報:')
-        console.log('- clientWidth:', video.clientWidth)
-        console.log('- clientHeight:', video.clientHeight)
-        console.log('- offsetWidth:', video.offsetWidth)
-        console.log('- offsetHeight:', video.offsetHeight)
+        console.log('📺 Video要素にストリーム設定')
+        videoRef.current.srcObject = mediaStream
         
-        // ストリームを設定
-        video.srcObject = mediaStream
-        
-        // 強制的にplay()を実行
-        try {
-          console.log('▶️ Video play() 実行中...')
-          await video.play()
-          console.log('✅ Video play() 成功')
-          
-          // 再生後の情報
-          setTimeout(() => {
-            console.log('📺 再生後のVideo情報:')
-            console.log('- videoWidth:', video.videoWidth)
-            console.log('- videoHeight:', video.videoHeight)
-            console.log('- paused:', video.paused)
-            console.log('- currentTime:', video.currentTime)
-          }, 1000)
-          
-        } catch (playError) {
-          console.error('❌ Video play() エラー:', playError)
-          
-          // 手動で再生を試みる
-          video.muted = true
-          video.playsInline = true
-          await video.play()
+        // loadedmetadataイベントを待つ
+        videoRef.current.onloadedmetadata = () => {
+          console.log('📺 メタデータ読み込み完了')
+          if (videoRef.current) {
+            console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+          }
         }
       }
       
       setStream(mediaStream)
-      console.log('🎉 カメラ起動完了!')
+      console.log('🎉 カメラセットアップ完了')
       
     } catch (error: any) {
       console.error('💥 カメラエラー:', error)
-      setCameraError(`カメラエラー: ${error.message}`)
+      setCameraError(`カメラアクセスエラー: ${error.message}`)
     }
   }, [])
 
@@ -122,8 +62,16 @@ export default function Home() {
     if (videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current
       const video = videoRef.current
-      const context = canvas.getContext('2d')
       
+      console.log('📸 撮影開始')
+      console.log('Video寸法:', video.videoWidth, 'x', video.videoHeight)
+      
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        setCameraError('ビデオが正しく読み込まれていません。手動再生ボタンを試してください。')
+        return
+      }
+      
+      const context = canvas.getContext('2d')
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
       
@@ -132,7 +80,7 @@ export default function Home() {
         const imageData = canvas.toDataURL('image/jpeg')
         setCapturedImage(imageData)
         stopCamera()
-        // 自動解析は行わず、ユーザーが手動で解析ボタンを押すように変更
+        console.log('📸 撮影完了')
       }
     }
   }, [stopCamera])
@@ -230,25 +178,24 @@ export default function Home() {
                       ref={videoRef}
                       playsInline
                       muted
-                      autoPlay
-                      className="w-full h-64 rounded-lg shadow-md bg-black"
+                      className="w-full h-64 rounded-lg shadow-md"
                       style={{
                         minHeight: '200px',
                         maxHeight: '400px',
                         objectFit: 'cover'
                       }}
+                      onLoadedMetadata={() => {
+                        console.log('🎥 Metadata loaded')
+                        if (videoRef.current) {
+                          console.log('📺 Video寸法:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+                        }
+                      }}
                       onCanPlay={() => {
-                        console.log('🎥 Video can play - ストリーム表示準備完了')
-                      }}
-                      onLoadedData={() => {
-                        console.log('🎥 Video loaded data - データ読み込み完了')
-                      }}
-                      onPlaying={() => {
-                        console.log('🎥 Video playing - 再生開始')
+                        console.log('🎥 Can play')
                       }}
                       onError={(e) => {
                         console.error('🎥 Video error:', e)
-                        setCameraError('ビデオストリームの表示に失敗しました。')
+                        setCameraError('ビデオ表示エラーが発生しました')
                       }}
                     />
                     <button
@@ -294,22 +241,58 @@ export default function Home() {
                       <div>トラック数: {stream?.getTracks().length || 0}</div>
                       {videoRef.current && (
                         <>
-                          <div>Video要素: {videoRef.current.videoWidth}x{videoRef.current.videoHeight}</div>
+                          <div>Video寸法: {videoRef.current.videoWidth || 'N/A'}x{videoRef.current.videoHeight || 'N/A'}</div>
                           <div>再生状態: {videoRef.current.paused ? '⏸️ 停止' : '▶️ 再生中'}</div>
+                          <div>Current時間: {videoRef.current.currentTime.toFixed(2)}秒</div>
                         </>
                       )}
                     </div>
-                    <button
-                      onClick={() => {
-                        if (videoRef.current) {
-                          console.log('🔄 手動再生試行')
-                          videoRef.current.play().catch(console.error)
-                        }
-                      }}
-                      className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-800 rounded text-xs"
-                    >
-                      手動再生
-                    </button>
+                    
+                    <div className="mt-2 space-y-1">
+                      <button
+                        onClick={async () => {
+                          if (videoRef.current) {
+                            try {
+                              console.log('🔄 手動再生試行')
+                              await videoRef.current.play()
+                              console.log('✅ 手動再生成功')
+                            } catch (error) {
+                              console.error('❌ 手動再生失敗:', error)
+                            }
+                          }
+                        }}
+                        className="w-full px-3 py-1 bg-green-200 text-green-800 rounded text-xs"
+                      >
+                        ▶️ 手動再生
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          if (videoRef.current && stream) {
+                            console.log('🔄 ストリーム再設定')
+                            videoRef.current.srcObject = null
+                            setTimeout(() => {
+                              if (videoRef.current) {
+                                videoRef.current.srcObject = stream
+                              }
+                            }, 100)
+                          }
+                        }}
+                        className="w-full px-3 py-1 bg-blue-200 text-blue-800 rounded text-xs"
+                      >
+                        🔄 ストリーム再設定
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          stopCamera()
+                          console.log('🛑 カメラ停止')
+                        }}
+                        className="w-full px-3 py-1 bg-red-200 text-red-800 rounded text-xs"
+                      >
+                        🛑 カメラ停止
+                      </button>
+                    </div>
                   </div>
                 )}
                 

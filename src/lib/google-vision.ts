@@ -7,20 +7,36 @@ export function getVisionClient(): ImageAnnotatorClient {
   if (!visionClient) {
     // 環境変数から認証情報を取得
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
-    const privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n')
+    let privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY
     const clientEmail = process.env.GOOGLE_CLOUD_CLIENT_EMAIL
 
     if (!projectId || !privateKey || !clientEmail) {
       throw new Error('Google Cloud Vision API credentials are not properly configured')
     }
 
-    visionClient = new ImageAnnotatorClient({
-      projectId,
-      credentials: {
-        private_key: privateKey,
-        client_email: clientEmail,
-      },
-    })
+    // Private Keyの改行文字を確実に処理
+    privateKey = privateKey.replace(/\\n/g, '\n')
+    
+    // デバッグ用ログ
+    console.log('Vision Client初期化:')
+    console.log('Project ID:', projectId)
+    console.log('Client Email:', clientEmail)
+    console.log('Private Key starts with:', privateKey.substring(0, 50))
+    console.log('Private Key ends with:', privateKey.substring(privateKey.length - 50))
+
+    try {
+      visionClient = new ImageAnnotatorClient({
+        projectId,
+        credentials: {
+          private_key: privateKey,
+          client_email: clientEmail,
+        },
+      })
+      console.log('✅ Vision Client初期化成功')
+    } catch (error) {
+      console.error('❌ Vision Client初期化エラー:', error)
+      throw error
+    }
   }
 
   return visionClient

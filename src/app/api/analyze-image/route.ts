@@ -112,19 +112,34 @@ export async function POST(request: NextRequest) {
         const error = visionError as any
         console.error('エラー名:', error.name)
         console.error('エラーメッセージ:', error.message)
+        console.error('エラーコード:', error.code)
+        console.error('エラー詳細:', JSON.stringify(error, null, 2))
         console.error('スタックトレース:', error.stack)
         
-        // より詳細なエラー情報
+        // gRPCエラーの詳細
+        if (error.details) {
+          console.error('gRPC詳細:', error.details)
+        }
+        
+        // HTTPレスポンスエラーの詳細
         if (error.response) {
           console.error('レスポンスステータス:', error.response.status)
-          console.error('レスポンスデータ:', error.response.data)
+          console.error('レスポンスヘッダー:', error.response.headers)
+          console.error('レスポンスデータ:', JSON.stringify(error.response.data, null, 2))
+        }
+        
+        // Google Cloud特有のエラー
+        if (error.metadata) {
+          console.error('メタデータ:', error.metadata)
         }
         
         debugInfo.visionError = {
           name: error.name || 'Unknown',
           message: error.message || 'Unknown error',
           code: error.code,
-          status: error.response?.status
+          details: error.details,
+          status: error.response?.status,
+          fullError: JSON.stringify(error, null, 2)
         }
         
         // Vision APIエラー時はモックにフォールバック

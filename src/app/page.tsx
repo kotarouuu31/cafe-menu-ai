@@ -21,122 +21,93 @@ export default function Home() {
       setCameraError(null)
       console.log('=== カメラ起動開始 ===')
       
-      // デバイス一覧を確認
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const videoDevices = devices.filter(device => device.kind === 'videoinput')
-      console.log('利用可能なカメラ:', videoDevices.length, '台')
-      
-      // 制約を段階的に緩和
+      // 段階的制約設定（Macに最適化）
       const constraintOptions = [
-        // 1. 理想的な設定（背面カメラ）
+        // 1. 基本設定
+        { video: true },
+        // 2. 詳細設定
+        {
+          video: {
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 },
+            frameRate: { ideal: 30 }
+          }
+        },
+        // 3. 背面カメラ
         {
           video: {
             facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 640 },
+            height: { ideal: 480 }
           }
-        },
-        // 2. 背面カメラのみ
-        {
-          video: { facingMode: 'environment' }
-        },
-        // 3. 任意のカメラ
-        {
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        },
-        // 4. 最小限の設定
-        {
-          video: true
         }
       ]
       
       let mediaStream: MediaStream | null = null
-      let lastError: any = null
       
       for (let i = 0; i < constraintOptions.length; i++) {
         try {
-          console.log(`カメラ制約 ${i + 1} を試行:`, constraintOptions[i])
+          console.log(`🎥 制約 ${i + 1} を試行:`, constraintOptions[i])
           mediaStream = await navigator.mediaDevices.getUserMedia(constraintOptions[i])
-          console.log('カメラ取得成功:', mediaStream.getTracks().length, 'トラック')
+          console.log(`✅ 制約 ${i + 1} 成功! トラック数:`, mediaStream.getTracks().length)
+          
+          // ストリーム情報をログ出力
+          mediaStream.getTracks().forEach((track, index) => {
+            console.log(`📹 Track ${index}:`, track.kind, track.label, track.getSettings())
+          })
+          
           break
         } catch (error) {
-          console.log(`制約 ${i + 1} 失敗:`, error)
-          lastError = error
+          console.log(`❌ 制約 ${i + 1} 失敗:`, error)
         }
       }
       
       if (!mediaStream) {
-        throw lastError || new Error('すべての制約が失敗しました')
+        throw new Error('カメラストリームの取得に失敗しました')
       }
       
       if (videoRef.current) {
-        console.log('ビデオ要素にストリーム設定中...')
-        videoRef.current.srcObject = mediaStream
+        const video = videoRef.current
+        console.log('📺 Video element 情報:')
+        console.log('- clientWidth:', video.clientWidth)
+        console.log('- clientHeight:', video.clientHeight)
+        console.log('- offsetWidth:', video.offsetWidth)
+        console.log('- offsetHeight:', video.offsetHeight)
         
-        // Promise ベースでplay()を実行
+        // ストリームを設定
+        video.srcObject = mediaStream
+        
+        // 強制的にplay()を実行
         try {
-          await new Promise<void>((resolve, reject) => {
-            if (!videoRef.current) {
-              reject(new Error('Video element not found'))
-              return
-            }
-            
-            const video = videoRef.current
-            
-            video.onloadedmetadata = async () => {
-              try {
-                console.log('メタデータ読み込み完了、再生開始...')
-                await video.play()
-                console.log('ビデオ再生成功')
-                resolve()
-              } catch (playError) {
-                console.error('再生エラー:', playError)
-                reject(playError)
-              }
-            }
-            
-            video.onerror = (e) => {
-              console.error('ビデオエラー:', e)
-              reject(new Error('Video error'))
-            }
-            
-            // 5秒でタイムアウト
-            setTimeout(() => {
-              reject(new Error('Video load timeout'))
-            }, 5000)
-          })
+          console.log('▶️ Video play() 実行中...')
+          await video.play()
+          console.log('✅ Video play() 成功')
+          
+          // 再生後の情報
+          setTimeout(() => {
+            console.log('📺 再生後のVideo情報:')
+            console.log('- videoWidth:', video.videoWidth)
+            console.log('- videoHeight:', video.videoHeight)
+            console.log('- paused:', video.paused)
+            console.log('- currentTime:', video.currentTime)
+          }, 1000)
+          
         } catch (playError) {
-          console.error('ビデオ再生に失敗:', playError)
-          // 再生に失敗してもストリームは設定されているので続行
+          console.error('❌ Video play() エラー:', playError)
+          
+          // 手動で再生を試みる
+          video.muted = true
+          video.playsInline = true
+          await video.play()
         }
       }
       
       setStream(mediaStream)
-      console.log('=== カメラ起動完了 ===')
+      console.log('🎉 カメラ起動完了!')
       
     } catch (error: any) {
-      console.error('=== カメラエラー詳細 ===')
-      console.error('エラー名:', error.name)
-      console.error('エラーメッセージ:', error.message)
-      
-      let errorMessage = 'カメラへのアクセスに失敗しました。'
-      
-      if (error.name === 'NotAllowedError') {
-        errorMessage += 'ブラウザの設定でカメラの使用を許可してください。'
-      } else if (error.name === 'NotFoundError') {
-        errorMessage += 'カメラデバイスが見つかりません。'
-      } else if (error.name === 'NotReadableError') {
-        errorMessage += 'カメラが他のアプリケーションで使用されています。'
-      } else if (error.name === 'OverconstrainedError') {
-        errorMessage += 'カメラの制約を満たすデバイスがありません。'
-      } else {
-        errorMessage += `詳細: ${error.message}`
-      }
-      
-      setCameraError(errorMessage)
+      console.error('💥 カメラエラー:', error)
+      setCameraError(`カメラエラー: ${error.message}`)
     }
   }, [])
 
@@ -259,7 +230,26 @@ export default function Home() {
                       ref={videoRef}
                       playsInline
                       muted
-                      className="w-full rounded-lg shadow-md"
+                      autoPlay
+                      className="w-full h-64 rounded-lg shadow-md bg-black"
+                      style={{
+                        minHeight: '200px',
+                        maxHeight: '400px',
+                        objectFit: 'cover'
+                      }}
+                      onCanPlay={() => {
+                        console.log('🎥 Video can play - ストリーム表示準備完了')
+                      }}
+                      onLoadedData={() => {
+                        console.log('🎥 Video loaded data - データ読み込み完了')
+                      }}
+                      onPlaying={() => {
+                        console.log('🎥 Video playing - 再生開始')
+                      }}
+                      onError={(e) => {
+                        console.error('🎥 Video error:', e)
+                        setCameraError('ビデオストリームの表示に失敗しました。')
+                      }}
                     />
                     <button
                       onClick={captureImage}
@@ -294,6 +284,35 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+                
+                {/* デバッグ用ボタン - 一時的 */}
+                {stream && (
+                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                    <div className="text-sm text-yellow-800 mb-2">🔧 デバッグ情報</div>
+                    <div className="space-y-1 text-xs text-yellow-700">
+                      <div>ストリーム: {stream ? '✅ アクティブ' : '❌ なし'}</div>
+                      <div>トラック数: {stream?.getTracks().length || 0}</div>
+                      {videoRef.current && (
+                        <>
+                          <div>Video要素: {videoRef.current.videoWidth}x{videoRef.current.videoHeight}</div>
+                          <div>再生状態: {videoRef.current.paused ? '⏸️ 停止' : '▶️ 再生中'}</div>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (videoRef.current) {
+                          console.log('🔄 手動再生試行')
+                          videoRef.current.play().catch(console.error)
+                        }
+                      }}
+                      className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-800 rounded text-xs"
+                    >
+                      手動再生
+                    </button>
+                  </div>
+                )}
+                
                 <input
                   ref={fileInputRef}
                   type="file"

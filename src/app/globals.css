@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Video要素の表示を確実にする */
+video {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}

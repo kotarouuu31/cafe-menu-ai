@@ -89,9 +89,8 @@ export async function POST(request: NextRequest) {
       try {
         console.log('=== Google Vision API 呼び出し開始 ===')
         console.log('Project ID:', projectId)
-        console.log('Client Email:', clientEmail)
-        console.log('Private Key prefix:', privateKey?.substring(0, 50))
-        console.log('Image buffer size:', imageBuffer.length)
+        console.log('Client Email:', clientEmail?.substring(0, 20) + '...')
+        console.log('Image buffer size:', imageBuffer.length, 'bytes')
         
         const visionResult = await analyzeImageWithVision(imageBuffer)
         
@@ -106,40 +105,21 @@ export async function POST(request: NextRequest) {
         
         debugInfo.visionSuccess = true
         debugInfo.labelsCount = visionResult.detectedLabels.length
+        debugInfo.detectedLabels = visionResult.detectedLabels.map(l => ({
+          description: l.description,
+          confidence: Math.round(l.confidence * 100)
+        }))
         
-      } catch (visionError: unknown) {
+      } catch (visionError: any) {
         console.error('=== Google Vision API エラー詳細 ===')
-        const error = visionError as any
-        console.error('エラー名:', error.name)
-        console.error('エラーメッセージ:', error.message)
-        console.error('エラーコード:', error.code)
-        console.error('エラー詳細:', JSON.stringify(error, null, 2))
-        console.error('スタックトレース:', error.stack)
-        
-        // gRPCエラーの詳細
-        if (error.details) {
-          console.error('gRPC詳細:', error.details)
-        }
-        
-        // HTTPレスポンスエラーの詳細
-        if (error.response) {
-          console.error('レスポンスステータス:', error.response.status)
-          console.error('レスポンスヘッダー:', error.response.headers)
-          console.error('レスポンスデータ:', JSON.stringify(error.response.data, null, 2))
-        }
-        
-        // Google Cloud特有のエラー
-        if (error.metadata) {
-          console.error('メタデータ:', error.metadata)
-        }
+        console.error('エラータイプ:', typeof visionError)
+        console.error('エラーメッセージ:', visionError?.message)
+        console.error('エラースタック:', visionError?.stack)
         
         debugInfo.visionError = {
-          name: error.name || 'Unknown',
-          message: error.message || 'Unknown error',
-          code: error.code,
-          details: error.details,
-          status: error.response?.status,
-          fullError: JSON.stringify(error, null, 2)
+          name: visionError?.name || 'Unknown',
+          message: visionError?.message || 'Unknown error',
+          type: typeof visionError
         }
         
         // Vision APIエラー時はモックにフォールバック

@@ -1,45 +1,18 @@
-import { ImageAnnotatorClient } from '@google-cloud/vision'
+// 画像解析結果の型定義
+export interface VisionAnalysisResult {
+  detectedLabels: Array<{
+    description: string
+    score: number
+    confidence: number
+  }>
+  detectedItems: string[]
+  confidence: number
+}
 
-// Google Cloud Vision APIクライアントの初期化
-let visionClient: ImageAnnotatorClient | null = null
-
-export function getVisionClient(): ImageAnnotatorClient {
-  if (!visionClient) {
-    // 環境変数から認証情報を取得
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
-    let privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY
-    const clientEmail = process.env.GOOGLE_CLOUD_CLIENT_EMAIL
-
-    if (!projectId || !privateKey || !clientEmail) {
-      throw new Error('Google Cloud Vision API credentials are not properly configured')
-    }
-
-    // Private Keyの改行文字を確実に処理
-    privateKey = privateKey.replace(/\\n/g, '\n')
-    
-    // デバッグ用ログ
-    console.log('Vision Client初期化:')
-    console.log('Project ID:', projectId)
-    console.log('Client Email:', clientEmail)
-    console.log('Private Key starts with:', privateKey.substring(0, 50))
-    console.log('Private Key ends with:', privateKey.substring(privateKey.length - 50))
-
-    try {
-      visionClient = new ImageAnnotatorClient({
-        projectId,
-        credentials: {
-          private_key: privateKey,
-          client_email: clientEmail,
-        },
-      })
-      console.log('✅ Vision Client初期化成功')
-    } catch (error) {
-      console.error('❌ Vision Client初期化エラー:', error)
-      throw error
-    }
-  }
-
-  return visionClient
+// Base64画像データをバッファに変換
+export function base64ToBuffer(base64Data: string): Buffer {
+  const base64String = base64Data.replace(/^data:image\/[a-z]+;base64,/, '')
+  return Buffer.from(base64String, 'base64')
 }
 
 // 英語ラベル → 日本語キーワード変換マップ
@@ -52,7 +25,7 @@ const labelTranslationMap: Record<string, string[]> = {
   // デザート・スイーツ
   'dessert': ['デザート', 'スイーツ'],
   'cake': ['ケーキ'],
-  'chocolate': ['チョコレート'],
+  'chocolate': ['チョコレート', 'チョコ'],
   'ice cream': ['アイスクリーム', 'アイス'],
   'cookie': ['クッキー'],
   'pastry': ['ペストリー', 'パン菓子'],
@@ -63,7 +36,7 @@ const labelTranslationMap: Record<string, string[]> = {
   // コーヒー・茶
   'coffee': ['コーヒー'],
   'espresso': ['エスプレッソ'],
-  'latte': ['ラテ'],
+  'latte': ['ラテ', 'カフェラテ'],
   'cappuccino': ['カプチーノ'],
   'tea': ['茶', 'ティー'],
   'green tea': ['緑茶'],
@@ -84,6 +57,7 @@ const labelTranslationMap: Record<string, string[]> = {
   'fish': ['魚'],
   'salmon': ['サーモン', '鮭'],
   'tuna': ['ツナ', 'マグロ'],
+  'bacon': ['ベーコン'],
   
   // 野菜・果物
   'vegetable': ['野菜'],
@@ -113,15 +87,7 @@ const labelTranslationMap: Record<string, string[]> = {
 }
 
 // 食べ物関連のラベルかどうかを判定
-const foodRelatedLabels = new Set([
-  'food', 'drink', 'beverage', 'dessert', 'cake', 'chocolate', 'ice cream',
-  'cookie', 'pastry', 'pie', 'tart', 'pudding', 'coffee', 'espresso', 'latte',
-  'cappuccino', 'tea', 'green tea', 'black tea', 'bread', 'sandwich', 'toast',
-  'bagel', 'croissant', 'meat', 'chicken', 'beef', 'pork', 'fish', 'salmon',
-  'tuna', 'vegetable', 'fruit', 'salad', 'tomato', 'lettuce', 'onion', 'potato',
-  'milk', 'cheese', 'butter', 'cream', 'yogurt', 'egg', 'rice', 'pasta',
-  'noodle', 'soup', 'sauce', 'sugar', 'salt'
-])
+const foodRelatedLabels = new Set(Object.keys(labelTranslationMap))
 
 export function isFoodRelated(label: string): boolean {
   return foodRelatedLabels.has(label.toLowerCase())
@@ -132,51 +98,124 @@ export function translateLabelToJapanese(label: string): string[] {
   return labelTranslationMap[lowerLabel] || [label]
 }
 
-// Base64画像データをバッファに変換
-export function base64ToBuffer(base64Data: string): Buffer {
-  // データURLプレフィックスを削除
-  const base64String = base64Data.replace(/^data:image\/[a-z]+;base64,/, '')
-  return Buffer.from(base64String, 'base64')
-}
-
-// 画像解析結果の型定義
-export interface VisionAnalysisResult {
-  detectedLabels: Array<{
-    description: string
-    score: number
-    confidence: number
-  }>
-  detectedItems: string[]
-  confidence: number
-}
-
-// Google Vision APIで画像を解析
-export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<VisionAnalysisResult> {
+// Google Cloud Vision APIのアクセストークン取得
+async function getAccessToken(): Promise<string> {
+  const privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n')
+  const clientEmail = process.env.GOOGLE_CLOUD_CLIENT_EMAIL
+  
+  if (!privateKey || !clientEmail) {
+    throw new Error('Google Cloud credentials not configured')
+  }
+  
   try {
-    const client = getVisionClient()
+    const { sign } = await import('jsonwebtoken')
     
-    // Label Detection APIを呼び出し
-    const [result] = await client.labelDetection({
-      image: { content: imageBuffer },
+    const iat = Math.floor(Date.now() / 1000)
+    const exp = iat + 3600 // 1時間有効
+    
+    const payload = {
+      iss: clientEmail,
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat,
+      exp,
+    }
+    
+    const token = sign(payload, privateKey, { algorithm: 'RS256' })
+    
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: token,
+      }),
     })
     
-    const labels = result.labelAnnotations || []
+    if (!response.ok) {
+      throw new Error(`Token request failed: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.access_token
+  } catch (error) {
+    console.error('Access token error:', error)
+    throw new Error('Failed to get access token')
+  }
+}
+
+// Google Vision APIで画像を解析（REST API使用）
+export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<VisionAnalysisResult> {
+  try {
+    console.log('🔍 Vision API解析開始')
+    
+    // アクセストークン取得
+    const accessToken = await getAccessToken()
+    console.log('✅ アクセストークン取得成功')
+    
+    // Vision API REST呼び出し
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
+    const base64Image = imageBuffer.toString('base64')
+    
+    const response = await fetch(
+      `https://vision.googleapis.com/v1/projects/${projectId}/images:annotate`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              image: {
+                content: base64Image,
+              },
+              features: [
+                {
+                  type: 'LABEL_DETECTION',
+                  maxResults: 20,
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Vision API error response:', errorText)
+      throw new Error(`Vision API request failed: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log('📊 Vision API レスポンス受信')
+    
+    const labels = data.responses?.[0]?.labelAnnotations || []
+    console.log('🏷️ 検出されたラベル数:', labels.length)
     
     // 食べ物関連のラベルのみをフィルタリング
-    const foodLabels = labels.filter(label => 
+    const foodLabels = labels.filter((label: any) => 
       label.description && isFoodRelated(label.description)
     )
     
+    console.log('🍽️ 食べ物関連ラベル数:', foodLabels.length)
+    
     // 日本語キーワードに変換
     const detectedItems: string[] = []
-    const detectedLabels = foodLabels.map(label => {
+    const detectedLabels = foodLabels.map((label: any) => {
       const description = label.description || ''
       const score = label.score || 0
-      const confidence = label.confidence || 0
+      const confidence = score // Vision APIではscoreがconfidenceと同じ
       
       // 日本語キーワードを追加
       const japaneseKeywords = translateLabelToJapanese(description)
       detectedItems.push(...japaneseKeywords)
+      
+      console.log(`🔖 ${description} → ${japaneseKeywords.join(', ')} (信頼度: ${Math.round(confidence * 100)}%)`)
       
       return {
         description,
@@ -190,16 +229,20 @@ export async function analyzeImageWithVision(imageBuffer: Buffer): Promise<Visio
     
     // 平均信頼度を計算
     const averageConfidence = detectedLabels.length > 0
-      ? detectedLabels.reduce((sum, label) => sum + label.confidence, 0) / detectedLabels.length
+      ? detectedLabels.reduce((sum: number, label: any) => sum + label.confidence, 0) / detectedLabels.length
       : 0
+    
+    console.log('✅ Vision API解析完了')
+    console.log('📝 検出キーワード:', uniqueDetectedItems)
+    console.log('📊 平均信頼度:', Math.round(averageConfidence * 100), '%')
     
     return {
       detectedLabels,
       detectedItems: uniqueDetectedItems,
       confidence: averageConfidence,
     }
-  } catch (error) {
-    console.error('Google Vision API error:', error)
-    throw new Error('Failed to analyze image with Google Vision API')
+  } catch (error: any) {
+    console.error('💥 Google Vision API error:', error)
+    throw new Error(`Failed to analyze image with Google Vision API: ${error.message}`)
   }
 }

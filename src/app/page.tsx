@@ -19,34 +19,123 @@ export default function Home() {
   const startCamera = useCallback(async () => {
     try {
       setCameraError(null)
-      // より広い互換性のためのカメラ設定
-      const constraints = {
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+      console.log('=== カメラ起動開始 ===')
+      
+      // デバイス一覧を確認
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const videoDevices = devices.filter(device => device.kind === 'videoinput')
+      console.log('利用可能なカメラ:', videoDevices.length, '台')
+      
+      // 制約を段階的に緩和
+      const constraintOptions = [
+        // 1. 理想的な設定（背面カメラ）
+        {
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // 2. 背面カメラのみ
+        {
+          video: { facingMode: 'environment' }
+        },
+        // 3. 任意のカメラ
+        {
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // 4. 最小限の設定
+        {
+          video: true
+        }
+      ]
+      
+      let mediaStream: MediaStream | null = null
+      let lastError: any = null
+      
+      for (let i = 0; i < constraintOptions.length; i++) {
+        try {
+          console.log(`カメラ制約 ${i + 1} を試行:`, constraintOptions[i])
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraintOptions[i])
+          console.log('カメラ取得成功:', mediaStream.getTracks().length, 'トラック')
+          break
+        } catch (error) {
+          console.log(`制約 ${i + 1} 失敗:`, error)
+          lastError = error
         }
       }
       
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+      if (!mediaStream) {
+        throw lastError || new Error('すべての制約が失敗しました')
+      }
       
       if (videoRef.current) {
+        console.log('ビデオ要素にストリーム設定中...')
         videoRef.current.srcObject = mediaStream
-        // 明示的にplay()を呼び出し
-        await videoRef.current.play()
+        
+        // Promise ベースでplay()を実行
+        try {
+          await new Promise<void>((resolve, reject) => {
+            if (!videoRef.current) {
+              reject(new Error('Video element not found'))
+              return
+            }
+            
+            const video = videoRef.current
+            
+            video.onloadedmetadata = async () => {
+              try {
+                console.log('メタデータ読み込み完了、再生開始...')
+                await video.play()
+                console.log('ビデオ再生成功')
+                resolve()
+              } catch (playError) {
+                console.error('再生エラー:', playError)
+                reject(playError)
+              }
+            }
+            
+            video.onerror = (e) => {
+              console.error('ビデオエラー:', e)
+              reject(new Error('Video error'))
+            }
+            
+            // 5秒でタイムアウト
+            setTimeout(() => {
+              reject(new Error('Video load timeout'))
+            }, 5000)
+          })
+        } catch (playError) {
+          console.error('ビデオ再生に失敗:', playError)
+          // 再生に失敗してもストリームは設定されているので続行
+        }
       }
+      
       setStream(mediaStream)
+      console.log('=== カメラ起動完了 ===')
+      
     } catch (error: any) {
-      console.error('Error accessing camera:', error)
-      // より詳細なエラーメッセージ
+      console.error('=== カメラエラー詳細 ===')
+      console.error('エラー名:', error.name)
+      console.error('エラーメッセージ:', error.message)
+      
       let errorMessage = 'カメラへのアクセスに失敗しました。'
+      
       if (error.name === 'NotAllowedError') {
         errorMessage += 'ブラウザの設定でカメラの使用を許可してください。'
       } else if (error.name === 'NotFoundError') {
-        errorMessage += 'カメラが見つかりません。'
+        errorMessage += 'カメラデバイスが見つかりません。'
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'カメラが他のアプリケーションで使用されています。'
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage += 'カメラの制約を満たすデバイスがありません。'
       } else {
-        errorMessage += 'ファイルアップロードをお試しください。'
+        errorMessage += `詳細: ${error.message}`
       }
+      
       setCameraError(errorMessage)
     }
   }, [])
@@ -272,12 +361,48 @@ export default function Home() {
               
               {/* デバッグ情報 */}
               <div className="bg-gray-50 p-3 rounded-lg text-xs">
-                <div className="font-medium text-gray-700 mb-1">🔍 デバッグ情報</div>
-                <div className="text-gray-600">
+                <div className="font-medium text-gray-700 mb-2">🔍 デバッグ情報</div>
+                <div className="text-gray-600 space-y-1">
                   <div>Vision API使用: {analysisResult.usingVisionAPI ? 'はい' : 'いいえ (モック)'}</div>
                   <div>解析時刻: {analysisResult.analysisTime ? new Date(analysisResult.analysisTime).toLocaleTimeString() : 'N/A'}</div>
                   <div>検出キーワード数: {analysisResult.detectedItems.length}個</div>
                   <div>マッチしたメニュー数: {analysisResult.suggestedMenus.length}個</div>
+                  
+                  {/* 環境変数チェック情報 */}
+                  {analysisResult.debugInfo?.envCheck && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="font-medium text-gray-700 mb-1">📋 環境変数チェック</div>
+                      <div className="ml-2 space-y-1">
+                        <div>Project ID: {analysisResult.debugInfo.envCheck.hasProjectId ? '✅' : '❌'} ({analysisResult.debugInfo.envCheck.projectIdLength}文字)</div>
+                        <div>Private Key: {analysisResult.debugInfo.envCheck.hasPrivateKey ? '✅' : '❌'}</div>
+                        <div>Client Email: {analysisResult.debugInfo.envCheck.hasClientEmail ? '✅' : '❌'} ({analysisResult.debugInfo.envCheck.clientEmailDomain})</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Vision APIエラー情報 */}
+                  {analysisResult.debugInfo?.visionError && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="font-medium text-red-600 mb-1">⚠️ Vision APIエラー</div>
+                      <div className="ml-2 space-y-1 text-red-600">
+                        <div>エラー名: {analysisResult.debugInfo.visionError.name}</div>
+                        <div>メッセージ: {analysisResult.debugInfo.visionError.message}</div>
+                        {analysisResult.debugInfo.visionError.status && (
+                          <div>ステータス: {analysisResult.debugInfo.visionError.status}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Vision API成功情報 */}
+                  {analysisResult.debugInfo?.visionSuccess && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="font-medium text-green-600 mb-1">✅ Vision API成功</div>
+                      <div className="ml-2 space-y-1 text-green-600">
+                        <div>検出ラベル数: {analysisResult.debugInfo.labelsCount}個</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               

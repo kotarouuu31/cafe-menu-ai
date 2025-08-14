@@ -45,9 +45,27 @@ export interface UpdateMenuInput extends Partial<CreateMenuInput> {
 }
 
 export interface ImageAnalysisResult {
-  detectedItems: string[];
-  confidence: number;
-  suggestedMenus: Menu[];
-  analysisTime?: string;
-  usingVisionAPI?: boolean;
+  detectedItems: string[]
+  confidence: number
+  suggestedMenus: Menu[]
+  analysisTime: string
+  usingVisionAPI: boolean
+  debugInfo?: {
+    envCheck?: {
+      hasProjectId: boolean
+      hasPrivateKey: boolean
+      hasClientEmail: boolean
+      projectIdLength: number
+      privateKeyPrefix: string
+      clientEmailDomain: string
+    }
+    visionSuccess?: boolean
+    labelsCount?: number
+    visionError?: {
+      name: string
+      message: string
+      code?: string
+      status?: number
+    }
+  }
 }

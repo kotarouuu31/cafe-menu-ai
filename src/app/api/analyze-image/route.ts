@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
     try {
       imageBuffer = base64ToBuffer(validatedData.imageData)
       
-      // 画像サイズチェック
       if (imageBuffer.length > MAX_IMAGE_SIZE) {
         return NextResponse.json(
           { error: '画像サイズが大きすぎます。10MB以下のファイルを使用してください。' },
@@ -68,51 +67,89 @@ export async function POST(request: NextRequest) {
     }
     
     let analysisResult: { detectedItems: string[]; confidence: number }
+    const debugInfo: Record<string, any> = {}
     
-    // Google Vision APIが設定されているかチェック
-    const hasVisionCredentials = process.env.GOOGLE_CLOUD_PROJECT_ID && 
-                                process.env.GOOGLE_CLOUD_PRIVATE_KEY && 
-                                process.env.GOOGLE_CLOUD_CLIENT_EMAIL
+    // Google Vision APIが設定されているかチェック（詳細ログ付き）
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
+    const privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY
+    const clientEmail = process.env.GOOGLE_CLOUD_CLIENT_EMAIL
+    
+    debugInfo.envCheck = {
+      hasProjectId: !!projectId,
+      hasPrivateKey: !!privateKey,
+      hasClientEmail: !!clientEmail,
+      projectIdLength: projectId?.length || 0,
+      privateKeyPrefix: privateKey?.substring(0, 30) || 'none',
+      clientEmailDomain: clientEmail?.split('@')[1] || 'none'
+    }
+    
+    const hasVisionCredentials = projectId && privateKey && clientEmail
     
     if (hasVisionCredentials) {
       try {
-        // Google Vision APIで画像解析
-        console.log('Using Google Vision API for image analysis')
+        console.log('=== Google Vision API 呼び出し開始 ===')
+        console.log('Project ID:', projectId)
+        console.log('Client Email:', clientEmail)
+        console.log('Private Key prefix:', privateKey?.substring(0, 50))
+        console.log('Image buffer size:', imageBuffer.length)
+        
         const visionResult = await analyzeImageWithVision(imageBuffer)
+        
+        console.log('=== Vision API 成功 ===')
+        console.log('検出されたラベル数:', visionResult.detectedLabels.length)
+        console.log('検出されたアイテム:', visionResult.detectedItems)
+        
         analysisResult = {
           detectedItems: visionResult.detectedItems,
           confidence: visionResult.confidence,
         }
-      } catch (visionError) {
-        console.error('Google Vision API error, falling back to mock:', visionError)
+        
+        debugInfo.visionSuccess = true
+        debugInfo.labelsCount = visionResult.detectedLabels.length
+        
+      } catch (visionError: unknown) {
+        console.error('=== Google Vision API エラー詳細 ===')
+        const error = visionError as any
+        console.error('エラー名:', error.name)
+        console.error('エラーメッセージ:', error.message)
+        console.error('スタックトレース:', error.stack)
+        
+        // より詳細なエラー情報
+        if (error.response) {
+          console.error('レスポンスステータス:', error.response.status)
+          console.error('レスポンスデータ:', error.response.data)
+        }
+        
+        debugInfo.visionError = {
+          name: error.name || 'Unknown',
+          message: error.message || 'Unknown error',
+          code: error.code,
+          status: error.response?.status
+        }
+        
         // Vision APIエラー時はモックにフォールバック
+        console.log('Vision APIエラーのため、モック解析を使用')
         await new Promise(resolve => setTimeout(resolve, 1500))
         analysisResult = mockImageAnalysis()
       }
     } else {
-      // 環境変数が設定されていない場合はモックを使用
-      console.log('Google Vision API credentials not found, using mock analysis')
+      console.log('=== 環境変数が不足しています ===')
+      console.log('Debug info:', debugInfo.envCheck)
       await new Promise(resolve => setTimeout(resolve, 1500))
       analysisResult = mockImageAnalysis()
     }
     
-    // メニュー検索APIを呼び出し
+    // メニュー検索
     const searchResponse = await fetch(`${request.nextUrl.origin}/api/search-menu`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        keywords: analysisResult.detectedItems,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords: analysisResult.detectedItems }),
     })
     
     let suggestedMenus = []
     if (searchResponse.ok) {
       const searchResult = await searchResponse.json()
       suggestedMenus = searchResult.menus || []
-    } else {
-      console.error('Menu search API error:', await searchResponse.text())
     }
     
     const result = {
@@ -120,11 +157,13 @@ export async function POST(request: NextRequest) {
       confidence: analysisResult.confidence,
       suggestedMenus,
       analysisTime: new Date().toISOString(),
-      usingVisionAPI: hasVisionCredentials,
+      usingVisionAPI: hasVisionCredentials && !debugInfo.visionError,
+      debugInfo // デバッグ情報を含める
     }
     
     return NextResponse.json(result)
   } catch (error) {
+    console.error('=== 全体エラー ===', error)
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid input', details: error.issues },
@@ -132,7 +171,6 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    console.error('Error analyzing image:', error)
     return NextResponse.json(
       { error: 'Failed to analyze image' },
       { status: 500 }

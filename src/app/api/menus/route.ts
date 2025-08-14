@@ -19,11 +19,11 @@ const fallbackMenus = [
     id: '1',
     name: 'ガトーショコラ',
     description: '濃厚なチョコレートケーキ',
-    ingredients: 'チョコレート,バター,卵,砂糖,小麦粉',
-    allergens: '卵,小麦,乳',
-    keywords: 'chocolate,cake,dessert,チョコレート,ケーキ,デザート,スイーツ',
-    imageUrls: '',
-    price: 580,
+    ingredients: ['チョコレート', '卵', 'バター', '砂糖', '小麦粉'],
+    allergens: ['卵', '乳製品', '小麦'],
+    keywords: ['chocolate', 'cake', 'dessert', 'チョコレート', 'ケーキ', 'デザート'],
+    imageUrls: [],
+    price: 520,
     category: 'デザート',
     active: true,
     createdAt: new Date(),
@@ -33,10 +33,10 @@ const fallbackMenus = [
     id: '2',
     name: 'カフェラテ',
     description: 'エスプレッソとスチームミルクの絶妙なバランス',
-    ingredients: 'エスプレッソ,牛乳',
-    allergens: '乳製品',
-    keywords: 'coffee,latte,milk,コーヒー,ラテ,ミルク,ドリンク',
-    imageUrls: '',
+    ingredients: ['エスプレッソ', '牛乳'],
+    allergens: ['乳製品'],
+    keywords: ['coffee', 'latte', 'milk', 'コーヒー', 'ラテ', 'ミルク', 'ドリンク'],
+    imageUrls: [],
     price: 450,
     category: 'ドリンク',
     active: true,
@@ -47,10 +47,10 @@ const fallbackMenus = [
     id: '3',
     name: 'クラブハウスサンドイッチ',
     description: 'チキン、ベーコン、レタス、トマトの贅沢サンドイッチ',
-    ingredients: 'パン,チキン,ベーコン,レタス,トマト,マヨネーズ',
-    allergens: '小麦,卵,大豆',
-    keywords: 'sandwich,chicken,bacon,bread,サンドイッチ,チキン,ベーコン,パン',
-    imageUrls: '',
+    ingredients: ['パン', 'チキン', 'ベーコン', 'レタス', 'トマト', 'マヨネーズ'],
+    allergens: ['小麦', '卵', '大豆'],
+    keywords: ['sandwich', 'chicken', 'bacon', 'bread', 'サンドイッチ', 'チキン', 'ベーコン', 'パン'],
+    imageUrls: [],
     price: 780,
     category: 'フード',
     active: true,
@@ -59,14 +59,32 @@ const fallbackMenus = [
   },
 ]
 
+// DBデータをフロントエンド用に変換する関数
+const convertMenuForFrontend = (menu: any) => ({
+  ...menu,
+  ingredients: typeof menu.ingredients === 'string' 
+    ? JSON.parse(menu.ingredients || '[]')
+    : menu.ingredients,
+  allergens: typeof menu.allergens === 'string'
+    ? JSON.parse(menu.allergens || '[]')
+    : menu.allergens,
+  keywords: typeof menu.keywords === 'string'
+    ? JSON.parse(menu.keywords || '[]')
+    : menu.keywords,
+  imageUrls: typeof menu.imageUrls === 'string'
+    ? JSON.parse(menu.imageUrls || '[]')
+    : menu.imageUrls,
+})
+
 export async function GET() {
   try {
     const menus = await safePrismaOperation(
       async (prisma) => {
-        return await prisma.menu.findMany({
+        const dbMenus = await prisma.menu.findMany({
           where: { active: true },
           orderBy: { createdAt: 'desc' },
         })
+        return dbMenus.map(convertMenuForFrontend)
       },
       fallbackMenus
     )

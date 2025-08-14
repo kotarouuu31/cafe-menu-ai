@@ -5,6 +5,20 @@ import { Camera, Upload, Loader2, RotateCcw, Sparkles, AlertCircle } from 'lucid
 import { ImageAnalysisResult } from '@/types/menu'
 import { formatPrice } from '@/lib/utils'
 
+// 安全な配列変換関数
+const safeArrayFromString = (value: string | string[]): string[] => {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : [value]
+    } catch {
+      return value ? [value] : []
+    }
+  }
+  return []
+}
+
 export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<ImageAnalysisResult | null>(null)
@@ -531,10 +545,10 @@ export default function Home() {
                           </div>
                         )}
                         
-                        {menu.allergens.length > 0 && (
+                        {safeArrayFromString(menu.allergens).length > 0 && (
                           <div className="mt-2">
                             <span className="text-red-600 text-sm font-medium">
-                              アレルゲン: {menu.allergens.join(', ')}
+                              アレルゲン: {safeArrayFromString(menu.allergens).join(', ')}
                             </span>
                           </div>
                         )}

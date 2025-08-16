@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Camera, Upload, Loader2, RotateCcw, Sparkles, AlertCircle } from 'lucide-react'
+import { Camera, Upload, Loader2, AlertCircle, RefreshCw, RotateCcw, Sparkles } from 'lucide-react'
 import { ImageAnalysisResult } from '@/types/menu'
 import { formatPrice } from '@/lib/utils'
 import PWAInstall from '@/components/PWAInstall'
@@ -30,18 +30,54 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [currentFacingMode, setCurrentFacingMode] = useState<'environment' | 'user'>('environment')
 
   const startCamera = useCallback(async () => {
     try {
       setCameraError(null)
       console.log('=== カメラ起動開始 ===')
       
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 }
+      // スマホ背面カメラを優先的に使用
+      let mediaStream: MediaStream | null = null
+      
+      try {
+        // 1. 背面カメラを試行
+        console.log('📱 背面カメラを試行中...')
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { exact: 'environment' }, // 背面カメラを指定
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 }
+          }
+        })
+        console.log('✅ 背面カメラ取得成功')
+        setCurrentFacingMode('environment')
+      } catch (backCameraError) {
+        console.log('⚠️ 背面カメラ取得失敗、フロントカメラを試行...')
+        try {
+          // 2. フロントカメラを試行
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'user', // フロントカメラを指定
+              width: { ideal: 640, max: 1280 },
+              height: { ideal: 480, max: 720 }
+            }
+          })
+          console.log('✅ フロントカメラ取得成功')
+          setCurrentFacingMode('user')
+        } catch (frontCameraError) {
+          console.log('⚠️ フロントカメラも失敗、デフォルトカメラを試行...')
+          // 3. デフォルト（カメラ指定なし）を試行
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640, max: 1280 },
+              height: { ideal: 480, max: 720 }
+            }
+          })
+          console.log('✅ デフォルトカメラ取得成功')
+          setCurrentFacingMode('environment') // デフォルトは背面扱い
         }
-      })
+      }
       
       console.log('✅ ストリーム取得成功')
       setStream(mediaStream)
@@ -158,6 +194,55 @@ export default function Home() {
       }
     }
   }, [stopCamera])
+
+  // カメラ切り替え機能
+  const switchCamera = useCallback(async () => {
+    try {
+      console.log('🔄 カメラ切り替え開始')
+      
+      // 現在のストリームを停止
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+      }
+      
+      // 新しいfacingModeを決定
+      const newFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment'
+      console.log(`📱 ${newFacingMode === 'environment' ? '背面' : 'フロント'}カメラに切り替え中...`)
+      
+      let newStream: MediaStream | null = null
+      
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { exact: newFacingMode },
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 }
+          }
+        })
+        console.log(`✅ ${newFacingMode === 'environment' ? '背面' : 'フロント'}カメラ切り替え成功`)
+        setCurrentFacingMode(newFacingMode)
+      } catch (exactError) {
+        // exact指定で失敗した場合、ideal指定で試行
+        console.log('⚠️ exact指定失敗、ideal指定で試行...')
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: newFacingMode,
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 }
+          }
+        })
+        console.log(`✅ ${newFacingMode === 'environment' ? '背面' : 'フロント'}カメラ切り替え成功（ideal）`)
+        setCurrentFacingMode(newFacingMode)
+      }
+      
+      setStream(newStream)
+      setCameraError(null)
+      
+    } catch (error) {
+      console.error('❌ カメラ切り替え失敗:', error)
+      setCameraError('カメラの切り替えに失敗しました')
+    }
+  }, [stream, currentFacingMode])
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -290,6 +375,30 @@ export default function Home() {
                         setCameraError('ビデオ要素エラーが発生しました')
                       }}
                     />
+                    {/* カメラ切り替えボタン */}
+                    <button
+                      onClick={switchCamera}
+                      className="absolute top-4 right-4 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-all duration-200 hover:scale-105"
+                      title={`${currentFacingMode === 'environment' ? 'フロント' : '背面'}カメラに切り替え`}
+                    >
+                      {currentFacingMode === 'environment' ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs">📷</span>
+                          <RotateCcw className="w-4 h-4 text-blue-600" />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs">🤳</span>
+                          <RotateCcw className="w-4 h-4 text-blue-600" />
+                        </div>
+                      )}
+                    </button>
+                    
+                    {/* カメラ状態表示 */}
+                    <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
+                      {currentFacingMode === 'environment' ? '📷 背面' : '🤳 フロント'}
+                    </div>
+                    
                     <button
                       onClick={captureImage}
                       className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-full p-4 shadow-lg hover:bg-gray-50 transition-all duration-200 hover:scale-105"

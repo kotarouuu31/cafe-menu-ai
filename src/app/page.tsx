@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Camera, Upload, Loader2, RotateCcw, Sparkles, AlertCircle } from 'lucide-react'
 import { ImageAnalysisResult } from '@/types/menu'
 import { formatPrice } from '@/lib/utils'
+import PWAInstall from '@/components/PWAInstall'
 
 // 安全な配列変換関数
 const safeArrayFromString = (value: string | string[]): string[] => {
@@ -574,6 +575,7 @@ export default function Home() {
         </div>
       </div>
       <canvas ref={canvasRef} className="hidden" />
+      <PWAInstall />
     </div>
   )
 }

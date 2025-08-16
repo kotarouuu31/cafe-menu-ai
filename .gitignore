@@ -28,6 +28,7 @@
 *.json
 !package*.json
 !tsconfig*.json
+!public/manifest.json
 
 # debug
 npm-debug.log*

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Camera, Upload, Loader2, AlertCircle, RefreshCw, RotateCcw, Sparkles } from 'lucide-react'
-import { ImageAnalysisResult } from '@/types/menu'
+import { ImageAnalysisResult, Dish } from '@/types/menu'
 import { formatPrice } from '@/lib/utils'
 import PWAInstall from '@/components/PWAInstall'
 
@@ -573,7 +573,7 @@ export default function Home() {
                   <div>Vision API使用: {analysisResult.usingVisionAPI ? 'はい' : 'いいえ (モック)'}</div>
                   <div>解析時刻: {analysisResult.analysisTime ? new Date(analysisResult.analysisTime).toLocaleTimeString() : 'N/A'}</div>
                   <div>検出キーワード数: {analysisResult.detectedItems.length}個</div>
-                  <div>マッチしたメニュー数: {analysisResult.suggestedMenus.length}個</div>
+                  <div>マッチした料理数: {analysisResult.suggestedDishes.length}個</div>
                   
                   {/* 環境変数チェック情報 */}
                   {analysisResult.debugInfo?.envCheck && (
@@ -629,36 +629,55 @@ export default function Home() {
                 </div>
               )}
 
-              {analysisResult.suggestedMenus.length > 0 ? (
+              {analysisResult.suggestedDishes.length > 0 ? (
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">
-                    おすすめメニュー ({analysisResult.suggestedMenus.length}件)
+                    おすすめ料理 ({analysisResult.suggestedDishes.length}件)
                   </h4>
                   <div className="space-y-4">
-                    {analysisResult.suggestedMenus.map((menu) => (
-                      <div key={menu.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
+                    {analysisResult.suggestedDishes.map((dish: Dish) => (
+                      <div key={dish.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
                         <div className="flex justify-between items-start mb-2">
-                          <h5 className="font-semibold text-gray-800">{menu.name}</h5>
-                          {menu.price && (
+                          <h5 className="font-semibold text-gray-800">{dish.name}</h5>
+                          {dish.price && (
                             <span className="text-blue-600 font-bold text-lg">
-                              ¥{formatPrice(menu.price)}
+                              ¥{formatPrice(dish.price)}
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-600 text-sm mb-3">{menu.description}</p>
+                        <p className="text-gray-600 text-sm mb-3">{dish.description}</p>
                         
-                        {menu.category && (
+                        {dish.category && (
                           <div className="mb-2">
                             <span className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                              {menu.category}
+                              {dish.category}
                             </span>
                           </div>
                         )}
                         
-                        {safeArrayFromString(menu.allergens).length > 0 && (
+                        {/* 店舗からのコメント */}
+                        {dish.chef_comment && (
+                          <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                            <p className="text-sm text-yellow-800">
+                              <span className="font-medium">シェフから:</span> {dish.chef_comment}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* アレルゲン情報 */}
+                        {dish.allergens.length > 0 && (
                           <div className="mt-2">
                             <span className="text-red-600 text-sm font-medium">
-                              アレルゲン: {safeArrayFromString(menu.allergens).join(', ')}
+                              アレルゲン: {dish.allergens.join(', ')}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* 食材情報 */}
+                        {dish.ingredients.length > 0 && (
+                          <div className="mt-2">
+                            <span className="text-green-600 text-sm">
+                              食材: {dish.ingredients.join(', ')}
                             </span>
                           </div>
                         )}

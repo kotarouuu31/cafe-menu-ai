@@ -44,28 +44,69 @@ export interface UpdateMenuInput extends Partial<CreateMenuInput> {
   active?: boolean;
 }
 
-export interface ImageAnalysisResult {
-  detectedItems: string[]
-  confidence: number
-  suggestedMenus: Menu[]
-  analysisTime: string
-  usingVisionAPI: boolean
-  debugInfo?: {
-    envCheck?: {
-      hasProjectId: boolean
-      hasPrivateKey: boolean
-      hasClientEmail: boolean
-      projectIdLength: number
-      privateKeyPrefix: string
-      clientEmailDomain: string
-    }
-    visionSuccess?: boolean
-    labelsCount?: number
-    visionError?: {
-      name: string
-      message: string
-      code?: string
-      status?: number
-    }
+export interface Dish {
+  id: string
+  name: string
+  name_en?: string
+  description?: string
+  price?: number
+  category: string
+  
+  // 店舗メッセージ
+  chef_comment?: string
+  recommendation?: string
+  pairing_suggestion?: string
+  
+  // 食材・アレルギー
+  ingredients: string[]
+  allergens: string[]
+  nutritional_info: {
+    calories?: number
+    protein?: number
+    carbs?: number
+    fat?: number
   }
+  
+  // AI用
+  keywords: string[]
+  visual_keywords: string[]
+  
+  // 画像・ステータス
+  image_urls: string[]
+  available: boolean
+  seasonal: boolean
+  popular: boolean
+  
+  created_at: string
+  updated_at: string
+  notion_id?: string
+}
+
+export interface Ingredient {
+  id: string
+  name: string
+  name_en?: string
+  category?: string
+  allergen_type?: string
+  description?: string
+  created_at: string
+}
+
+export interface Allergen {
+  id: string
+  name: string
+  name_en?: string
+  severity: 'high' | 'medium' | 'low'
+  warning_message?: string
+  icon_url?: string
+  created_at: string
+}
+
+export interface ImageAnalysisResult {
+  confidence: number
+  detectedItems: string[]
+  suggestedDishes: Dish[]
+  usingVisionAPI: boolean
+  analysisTime?: number
+  debugInfo?: any
 }

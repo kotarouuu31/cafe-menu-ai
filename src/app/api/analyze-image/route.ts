@@ -23,10 +23,15 @@ function mockImageAnalysis(): { detectedItems: string[]; confidence: number } {
 
 export async function POST(request: NextRequest) {
   try {
+    // 環境変数チェック
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      console.warn('⚠️ Supabase環境変数が設定されていません。モックデータを使用します。')
+    }
+
     const { imageData } = await request.json()
 
     if (!imageData) {
-      return NextResponse.json({ error: 'No image data provided' }, { status: 400 })
+      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
     }
 
     let detectedItems: string[] = []

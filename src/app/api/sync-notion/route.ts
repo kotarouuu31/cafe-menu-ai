@@ -4,6 +4,14 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST() {
   try {
+    // 環境変数チェック
+    if (!process.env.NOTION_TOKEN || process.env.NOTION_TOKEN === 'placeholder-token') {
+      return NextResponse.json({ 
+        error: 'Notion環境変数が設定されていません',
+        success: false 
+      }, { status: 400 })
+    }
+
     console.log('🔄 Notion同期開始')
 
     const response = await notion.databases.query({

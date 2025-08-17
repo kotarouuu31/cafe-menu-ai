@@ -1,10 +1,10 @@
 import { Client } from '@notionhq/client'
 
 export const notion = new Client({
-  auth: process.env.NOTION_TOKEN,
+  auth: process.env.NOTION_TOKEN || 'placeholder-token',
 })
 
-export const DISHES_DATABASE_ID = process.env.NOTION_DISHES_DATABASE_ID!
+export const DISHES_DATABASE_ID = process.env.NOTION_DISHES_DATABASE_ID || 'placeholder-database-id'
 
 // Notionプロパティの型定義
 export interface NotionDishProperties {

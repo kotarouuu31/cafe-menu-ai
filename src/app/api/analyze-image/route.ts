@@ -66,8 +66,7 @@ export async function POST(request: NextRequest) {
     let suggestedDishes: any[] = []
     
     // Supabase環境変数が正しく設定されている場合のみクエリ実行
-    // デモ用にモック機能を強制的に使用
-    if (false && process.env.NEXT_PUBLIC_SUPABASE_URL && 
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && 
         process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://placeholder.supabase.co') {
       
       // Supabaseから料理データを検索

@@ -12,7 +12,15 @@ export async function POST() {
       }, { status: 400 })
     }
 
+    if (!process.env.NOTION_DISHES_DATABASE_ID || process.env.NOTION_DISHES_DATABASE_ID === 'placeholder-database-id') {
+      return NextResponse.json({ 
+        error: 'NotionデータベースIDが設定されていません',
+        success: false 
+      }, { status: 400 })
+    }
+
     console.log('🔄 Notion同期開始')
+    console.log('📋 データベースID:', DISHES_DATABASE_ID)
 
     const response = await notion.databases.query({
       database_id: DISHES_DATABASE_ID,

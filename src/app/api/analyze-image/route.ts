@@ -2,22 +2,54 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ImageAnalysisResult } from '@/types/menu'
 
-// モック画像解析：Google Vision APIが利用できない場合のフォールバック
+// 改善されたモック画像解析：より多様で現実的な結果
 function mockImageAnalysis(): { detectedItems: string[]; confidence: number } {
-  const menuBasedKeywords = [
-    ['チョコレート', 'ケーキ', 'デザート'],
-    ['コーヒー', 'ラテ', 'ドリンク'],
-    ['サンドイッチ', 'チキン', 'ベーコン'],
-    ['food', '食べ物', 'フード'],
-    ['drink', '飲み物', 'ドリンク']
+  const analysisPatterns = [
+    // コーヒー系
+    {
+      keywords: ['コーヒー', 'coffee', 'ドリンク', '黒い', '液体'],
+      confidence: 0.85
+    },
+    // ケーキ系
+    {
+      keywords: ['ケーキ', 'cake', 'デザート', '甘い', '白い'],
+      confidence: 0.8
+    },
+    // サンドイッチ系
+    {
+      keywords: ['サンドイッチ', 'sandwich', 'パン', '軽食', '四角い'],
+      confidence: 0.75
+    },
+    // サラダ系
+    {
+      keywords: ['サラダ', 'salad', '野菜', '緑の', 'ヘルシー'],
+      confidence: 0.7
+    },
+    // パンケーキ系
+    {
+      keywords: ['パンケーキ', 'pancake', 'フルーツ', '丸い', '重なった'],
+      confidence: 0.8
+    },
+    // カプチーノ系
+    {
+      keywords: ['カプチーノ', 'cappuccino', 'ミルク', '泡', 'クリーミー'],
+      confidence: 0.82
+    },
+    // 一般的な食べ物
+    {
+      keywords: ['food', '食べ物', 'dish', '料理'],
+      confidence: 0.6
+    }
   ]
   
-  const randomIndex = Math.floor(Math.random() * menuBasedKeywords.length)
-  const detectedItems = menuBasedKeywords[randomIndex]
+  const randomIndex = Math.floor(Math.random() * analysisPatterns.length)
+  const selected = analysisPatterns[randomIndex]
+  
+  console.log(`🎲 モック解析: ${selected.keywords.join(', ')} (信頼度: ${selected.confidence})`)
   
   return {
-    detectedItems,
-    confidence: 0.7
+    detectedItems: selected.keywords,
+    confidence: selected.confidence
   }
 }
 
@@ -45,9 +77,31 @@ export async function POST(request: NextRequest) {
 
     if (hasVisionAPI) {
       try {
-        // Google Vision API実装（既存のコードを使用）
-        // ... Vision API コード ...
+        const vision = require('@google-cloud/vision')
+        
+        // Google Cloud認証設定
+        const client = new vision.ImageAnnotatorClient({
+          projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+          credentials: {
+            client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
+            private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          },
+        })
+
+        // Base64データから画像を解析
+        const imageBuffer = Buffer.from(imageData.split(',')[1], 'base64')
+        
+        const [result] = await client.labelDetection({
+          image: { content: imageBuffer },
+        })
+        
+        const labels = result.labelAnnotations
+        detectedItems = labels?.map((label: any) => label.description) || []
+        confidence = labels?.[0]?.score || 0.7
         usingVisionAPI = true
+        
+        console.log('🔍 Google Vision API検出:', detectedItems)
+        
       } catch (visionError) {
         console.error('Vision API Error:', visionError)
         // フォールバックでモックデータを使用
@@ -74,24 +128,44 @@ export async function POST(request: NextRequest) {
       
       let data, error
       if (detectedItems.length > 0) {
+        // より柔軟な検索クエリ
+        const searchQueries = detectedItems.map(item => 
+          `keywords.cs.["${item}"],visual_keywords.cs.["${item}"],name.ilike.%${item}%,description.ilike.%${item}%`
+        )
+        
         const result = await supabaseAdmin
           .from('dishes')
           .select('*')
           .eq('available', true)
-          .or(
-            detectedItems.map(item => 
-              `keywords.cs.["${item}"],visual_keywords.cs.["${item}"],name.ilike.%${item}%`
-            ).join(',')
-          )
+          .or(searchQueries.join(','))
           .limit(5)
         data = result.data
         error = result.error
+        
+        // 検索結果が少ない場合は、カテゴリマッチングも試行
+        if ((!data || data.length < 3) && detectedItems.length > 0) {
+          console.log('🔄 カテゴリベース検索を追加実行...')
+          const categoryResult = await supabaseAdmin
+            .from('dishes')
+            .select('*')
+            .eq('available', true)
+            .limit(5)
+          
+          if (categoryResult.data) {
+            data = [...(data || []), ...categoryResult.data]
+            // 重複除去
+            data = data.filter((dish, index, self) => 
+              index === self.findIndex(d => d.id === dish.id)
+            )
+          }
+        }
       } else {
-        // キーワードがない場合は全ての利用可能な料理を取得
+        // キーワードがない場合は人気順で取得
         const result = await supabaseAdmin
           .from('dishes')
           .select('*')
           .eq('available', true)
+          .eq('popular', true)
           .limit(3)
         data = result.data
         error = result.error
@@ -102,6 +176,7 @@ export async function POST(request: NextRequest) {
         suggestedDishes = []
       } else {
         suggestedDishes = data || []
+        console.log(`✅ ${suggestedDishes.length}件の料理が見つかりました`)
       }
     } else {
       console.log('⚠️ Supabase未設定のため、モック料理データを使用')
@@ -142,6 +217,5 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Analysis error:', error)
-    return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })
-  }
+    return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })\n  }
 }

@@ -77,39 +77,74 @@ export async function POST(request: NextRequest) {
 
     if (hasVisionAPI) {
       try {
-        const vision = require('@google-cloud/vision')
+        console.log('🚀 Google Vision API 実行中...')
         
-        // Google Cloud認証設定
-        const client = new vision.ImageAnnotatorClient({
+        const { ImageAnnotatorClient } = await import('@google-cloud/vision')
+        
+        // 環境変数の詳細チェック
+        console.log('🔧 Vision API環境変数チェック:')
+        console.log('- PROJECT_ID:', !!process.env.GOOGLE_CLOUD_PROJECT_ID)
+        console.log('- CLIENT_EMAIL:', !!process.env.GOOGLE_CLOUD_CLIENT_EMAIL)
+        console.log('- PRIVATE_KEY 長さ:', process.env.GOOGLE_CLOUD_PRIVATE_KEY?.length || 0)
+
+        if (!process.env.GOOGLE_CLOUD_PRIVATE_KEY) {
+          throw new Error('GOOGLE_CLOUD_PRIVATE_KEY is missing')
+        }
+
+        const client = new ImageAnnotatorClient({
           projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
           credentials: {
             client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
+            private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY.replace(/\\n/g, '\n'),
           },
         })
 
+        console.log('✅ Vision API クライアント初期化成功')
+
         // Base64データから画像を解析
         const imageBuffer = Buffer.from(imageData.split(',')[1], 'base64')
+        console.log('📷 画像バッファサイズ:', imageBuffer.length, 'bytes')
         
         const [result] = await client.labelDetection({
           image: { content: imageBuffer },
         })
         
+        console.log('🎯 Vision API生レスポンス:', result)
+        
         const labels = result.labelAnnotations
-        detectedItems = labels?.map((label: any) => label.description) || []
-        confidence = labels?.[0]?.score || 0.7
-        usingVisionAPI = true
+        if (labels && labels.length > 0) {
+          detectedItems = labels.map((label: any) => label.description)
+          confidence = labels[0]?.score || 0.7
+          usingVisionAPI = true
+          
+          console.log('🔍 Google Vision API検出成功:', detectedItems)
+          console.log('🎯 信頼度:', confidence)
+        } else {
+          console.warn('⚠️ Vision API: ラベルが検出されませんでした')
+          throw new Error('No labels detected')
+        }
         
-        console.log('🔍 Google Vision API検出:', detectedItems)
+      } catch (visionError: any) {
+        console.error('❌ Vision API エラー詳細:', {
+          name: visionError.name,
+          message: visionError.message,
+          stack: visionError.stack,
+          code: visionError.code
+        })
         
-      } catch (visionError) {
-        console.error('Vision API Error:', visionError)
         // フォールバックでモックデータを使用
         const mockResult = mockImageAnalysis()
         detectedItems = mockResult.detectedItems
         confidence = mockResult.confidence
+        console.log('🔄 モックデータにフォールバック:', detectedItems)
       }
     } else {
+      console.log('⚠️ Vision API環境変数が未設定:', {
+        hasProjectId: !!process.env.GOOGLE_CLOUD_PROJECT_ID,
+        hasClientEmail: !!process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
+        hasPrivateKey: !!process.env.GOOGLE_CLOUD_PRIVATE_KEY
+      })
+      
       // モックデータ
       const mockResult = mockImageAnalysis()
       detectedItems = mockResult.detectedItems

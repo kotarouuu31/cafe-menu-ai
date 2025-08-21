@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { safePrismaOperation } from '@/lib/prisma'
 import { convertMenuForFrontend, searchMenusByKeywords } from '@/lib/menu-utils'
+import { createErrorResponse, withErrorHandler } from '@/lib/error-handler'
 
 const searchMenuSchema = z.object({
   keywords: z.array(z.string()).min(1, 'キーワードは少なくとも1つ必要です'),
@@ -55,56 +55,20 @@ const FALLBACK_MENUS = [
 
 // 重複削除：convertMenuForFrontend は menu-utils.ts に移動
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { keywords } = searchMenuSchema.parse(body)
+export const POST = withErrorHandler(async (request: NextRequest) => {
+  const body = await request.json()
+  const { keywords } = searchMenuSchema.parse(body)
 
-    console.log('🔍 メニュー検索開始:', keywords)
+  console.log('🔍 メニュー検索開始:', keywords)
 
-    const matchedMenus = await safePrismaOperation(
-      async (prisma) => {
-        const allMenus = await prisma.menu.findMany({
-          where: { active: true },
-        })
+  // Supabaseのみを使用するため、フォールバックメニューから検索
+  const matchedMenus = searchMenusByKeywords(FALLBACK_MENUS, keywords)
 
-        const convertedMenus = allMenus.map(convertMenuForFrontend)
-        
-        return convertedMenus.filter((menu: any) => {
-          const menuKeywords = menu.keywords.join(',').toLowerCase()
-          return keywords.some(keyword => 
-            menuKeywords.includes(keyword.toLowerCase())
-          )
-        })
-      },
-      // フォールバック検索
-      FALLBACK_MENUS.filter(menu => {
-        const menuKeywords = menu.keywords.join(',').toLowerCase()
-        return keywords.some(keyword => 
-          menuKeywords.includes(keyword.toLowerCase())
-        )
-      })
-    )
+  console.log('✅ マッチしたメニュー数:', matchedMenus.length)
 
-    console.log('✅ マッチしたメニュー数:', matchedMenus.length)
-
-    return NextResponse.json({ 
-      menus: matchedMenus,
-      searchKeywords: keywords,
-      totalMatches: matchedMenus.length
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid search parameters', details: error.issues },
-        { status: 400 }
-      )
-    }
-
-    console.error('Error searching menus:', error)
-    return NextResponse.json(
-      { error: 'Failed to search menus' },
-      { status: 500 }
-    )
-  }
-}
+  return NextResponse.json({ 
+    menus: matchedMenus,
+    searchKeywords: keywords,
+    totalMatches: matchedMenus.length
+  })
+}, 'メニュー検索に失敗しました')

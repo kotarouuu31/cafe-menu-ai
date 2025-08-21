@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { safePrismaOperation } from '@/lib/prisma'
 import { convertMenuForFrontend } from '@/lib/menu-utils'
 import { createErrorResponse, withErrorHandler } from '@/lib/error-handler'
 
@@ -64,39 +63,24 @@ const fallbackMenus = [
 // 重複削除：convertMenuForFrontend は menu-utils.ts に移動
 
 export const GET = withErrorHandler(async () => {
-  const menus = await safePrismaOperation(
-    async (prisma) => {
-      const dbMenus = await prisma.menu.findMany({
-        where: { active: true },
-        orderBy: { createdAt: 'desc' },
-      })
-      return dbMenus.map(convertMenuForFrontend)
-    },
-    fallbackMenus
-  )
-
-  return NextResponse.json({ menus })
+  // Supabaseのみを使用するため、フォールバックメニューを直接返す
+  // fallbackMenusは既にMenu形式なので変換不要
+  return NextResponse.json({ menus: fallbackMenus })
 }, 'メニュー取得に失敗しました')
 
 export const POST = withErrorHandler(async (request: NextRequest) => {
   const body = await request.json()
   const validatedData = createMenuSchema.parse(body)
 
-  const newMenu = await safePrismaOperation(
-    async (prisma) => {
-      return await prisma.menu.create({
-        data: validatedData,
-      })
-    },
-    {
-      id: Math.random().toString(),
-      ...validatedData,
-      price: validatedData.price ?? null,
-      active: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-  )
+  // Supabaseのみを使用するため、フォールバック作成
+  const newMenu = {
+    id: Math.random().toString(),
+    ...validatedData,
+    price: validatedData.price ?? null,
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
 
   return NextResponse.json(newMenu, { status: 201 })
 }, 'メニュー作成に失敗しました')

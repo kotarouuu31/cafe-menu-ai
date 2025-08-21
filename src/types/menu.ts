@@ -1,87 +1,72 @@
+// 基本メニュー型（統一）
 export interface Menu {
-  id: string;
-  name: string;
-  description: string;
-  ingredients: string[];
-  allergens: string[];
-  keywords: string[];
-  imageUrls: string[];
-  price?: number;
-  category: string;
-  active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface MenuDB {
-  id: string;
-  name: string;
-  description: string;
-  ingredients: string; // JSON string
-  allergens: string;   // JSON string
-  keywords: string;    // JSON string
-  imageUrls: string;   // JSON string
-  price?: number;
-  category: string;
-  active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface CreateMenuInput {
-  name: string;
-  description: string;
-  ingredients: string[];
-  allergens: string[];
-  keywords: string[];
-  imageUrls: string[];
-  price?: number;
-  category: string;
-}
-
-export interface UpdateMenuInput extends Partial<CreateMenuInput> {
-  id: string;
-  active?: boolean;
-}
-
-export interface Dish {
   id: string
   name: string
-  name_en?: string
-  description?: string
-  price?: number
+  description: string
+  ingredients: string[]
+  allergens: string[]
+  keywords: string[]
+  imageUrls: string[]
+  price?: number | null
   category: string
-  
-  // 店舗メッセージ
+  active: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// データベース用（JSON文字列フィールド）
+export interface MenuDB {
+  id: string
+  name: string
+  description: string
+  ingredients: string // JSON string
+  allergens: string   // JSON string
+  keywords: string    // JSON string
+  imageUrls: string   // JSON string
+  price?: number | null
+  category: string
+  active: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// フォーム入力型
+export interface CreateMenuInput {
+  name: string
+  description: string
+  ingredients: string[]
+  allergens: string[]
+  keywords: string[]
+  imageUrls: string[]
+  price?: number | null
+  category: string
+}
+
+// 更新用型
+export interface UpdateMenuInput extends Partial<CreateMenuInput> {
+  id: string
+  active?: boolean
+}
+
+// Notion用拡張型
+export interface Dish extends Menu {
+  name_en?: string
   chef_comment?: string
   recommendation?: string
   pairing_suggestion?: string
-  
-  // 食材・アレルギー
-  ingredients: string[]
-  allergens: string[]
-  nutritional_info: {
+  nutritional_info?: {
     calories?: number
     protein?: number
     carbs?: number
     fat?: number
   }
-  
-  // AI用
-  keywords: string[]
-  visual_keywords: string[]
-  
-  // 画像・ステータス
-  image_urls: string[]
-  available: boolean
-  seasonal: boolean
-  popular: boolean
-  
-  created_at: string
-  updated_at: string
+  visual_keywords?: string[]
+  seasonal?: boolean
+  popular?: boolean
   notion_id?: string
 }
 
+// 原材料型
 export interface Ingredient {
   id: string
   name: string
@@ -89,7 +74,7 @@ export interface Ingredient {
   category?: string
   allergen_type?: string
   description?: string
-  created_at: string
+  createdAt: Date
 }
 
 export interface Allergen {
@@ -102,6 +87,7 @@ export interface Allergen {
   created_at: string
 }
 
+// 画像解析結果型
 export interface ImageAnalysisResult {
   confidence: number
   detectedItems: string[]

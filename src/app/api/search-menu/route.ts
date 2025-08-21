@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { safePrismaOperation } from '@/lib/prisma'
+import { convertMenuForFrontend, searchMenusByKeywords } from '@/lib/menu-utils'
 
 const searchMenuSchema = z.object({
   keywords: z.array(z.string()).min(1, 'キーワードは少なくとも1つ必要です'),
@@ -52,22 +53,7 @@ const FALLBACK_MENUS = [
   },
 ]
 
-// DBデータをフロントエンド用に変換する関数
-const convertMenuForFrontend = (menu: any) => ({
-  ...menu,
-  ingredients: typeof menu.ingredients === 'string' 
-    ? JSON.parse(menu.ingredients || '[]')
-    : menu.ingredients,
-  allergens: typeof menu.allergens === 'string'
-    ? JSON.parse(menu.allergens || '[]')
-    : menu.allergens,
-  keywords: typeof menu.keywords === 'string'
-    ? JSON.parse(menu.keywords || '[]')
-    : menu.keywords,
-  imageUrls: typeof menu.imageUrls === 'string'
-    ? JSON.parse(menu.imageUrls || '[]')
-    : menu.imageUrls,
-})
+// 重複削除：convertMenuForFrontend は menu-utils.ts に移動
 
 export async function POST(request: NextRequest) {
   try {

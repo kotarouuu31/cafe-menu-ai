@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { safePrismaOperation } from '@/lib/prisma'
+import { convertMenuForFrontend } from '@/lib/menu-utils'
+import { createErrorResponse, withErrorHandler } from '@/lib/error-handler'
 
 const createMenuSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
-  ingredients: z.string(),
-  allergens: z.string(),
-  keywords: z.string(),
-  imageUrls: z.string().optional().default(''),
-  price: z.number().optional(),
+  ingredients: z.array(z.string()).transform(arr => JSON.stringify(arr)),
+  allergens: z.array(z.string()).transform(arr => JSON.stringify(arr)),
+  keywords: z.array(z.string()).transform(arr => JSON.stringify(arr)),
+  imageUrls: z.array(z.string()).optional().default([]).transform(arr => JSON.stringify(arr)),
+  price: z.number().optional().nullable(),
   category: z.string().min(1),
 })
 
@@ -59,76 +61,42 @@ const fallbackMenus = [
   },
 ]
 
-// DBデータをフロントエンド用に変換する関数
-const convertMenuForFrontend = (menu: any) => ({
-  ...menu,
-  ingredients: typeof menu.ingredients === 'string' 
-    ? JSON.parse(menu.ingredients || '[]')
-    : menu.ingredients,
-  allergens: typeof menu.allergens === 'string'
-    ? JSON.parse(menu.allergens || '[]')
-    : menu.allergens,
-  keywords: typeof menu.keywords === 'string'
-    ? JSON.parse(menu.keywords || '[]')
-    : menu.keywords,
-  imageUrls: typeof menu.imageUrls === 'string'
-    ? JSON.parse(menu.imageUrls || '[]')
-    : menu.imageUrls,
-})
+// 重複削除：convertMenuForFrontend は menu-utils.ts に移動
 
-export async function GET() {
-  try {
-    const menus = await safePrismaOperation(
-      async (prisma) => {
-        const dbMenus = await prisma.menu.findMany({
-          where: { active: true },
-          orderBy: { createdAt: 'desc' },
-        })
-        return dbMenus.map(convertMenuForFrontend)
-      },
-      fallbackMenus
-    )
+export const GET = withErrorHandler(async () => {
+  const menus = await safePrismaOperation(
+    async (prisma) => {
+      const dbMenus = await prisma.menu.findMany({
+        where: { active: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      return dbMenus.map(convertMenuForFrontend)
+    },
+    fallbackMenus
+  )
 
-    return NextResponse.json({ menus })
-  } catch (error) {
-    console.error('Error fetching menus:', error)
-    return NextResponse.json({ menus: fallbackMenus })
-  }
-}
+  return NextResponse.json({ menus })
+}, 'メニュー取得に失敗しました')
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const validatedData = createMenuSchema.parse(body)
+export const POST = withErrorHandler(async (request: NextRequest) => {
+  const body = await request.json()
+  const validatedData = createMenuSchema.parse(body)
 
-    const newMenu = await safePrismaOperation(
-      async (prisma) => {
-        return await prisma.menu.create({
-          data: validatedData,
-        })
-      },
-      {
-        id: Math.random().toString(),
-        ...validatedData,
-        active: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-    )
-
-    return NextResponse.json(newMenu, { status: 201 })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid input', details: error.issues },
-        { status: 400 }
-      )
+  const newMenu = await safePrismaOperation(
+    async (prisma) => {
+      return await prisma.menu.create({
+        data: validatedData,
+      })
+    },
+    {
+      id: Math.random().toString(),
+      ...validatedData,
+      price: validatedData.price ?? null,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
+  )
 
-    console.error('Error creating menu:', error)
-    return NextResponse.json(
-      { error: 'Failed to create menu' },
-      { status: 500 }
-    )
-  }
-}
+  return NextResponse.json(newMenu, { status: 201 })
+}, 'メニュー作成に失敗しました')

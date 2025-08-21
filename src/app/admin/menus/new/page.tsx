@@ -5,18 +5,20 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { ArrayInput, FormField, LoadingButton } from '@/components/ui/form-components'
+import { MENU_CATEGORIES } from '@/lib/menu-utils'
 
 const menuSchema = z.object({
   name: z.string().min(1, 'メニュー名は必須です'),
   description: z.string().min(1, '説明は必須です'),
   category: z.string().min(1, 'カテゴリは必須です'),
   price: z.number().min(0, '価格は0以上である必要があります').optional(),
-  ingredients: z.array(z.string()).default([]),
-  allergens: z.array(z.string()).default([]),
-  keywords: z.array(z.string()).default([]),
-  imageUrls: z.array(z.string()).default([]),
+  ingredients: z.array(z.string()).optional().default([]),
+  allergens: z.array(z.string()).optional().default([]),
+  keywords: z.array(z.string()).optional().default([]),
+  imageUrls: z.array(z.string()).optional().default([]),
 })
 
 type MenuFormData = z.infer<typeof menuSchema>
@@ -24,10 +26,7 @@ type MenuFormData = z.infer<typeof menuSchema>
 export default function NewMenuPage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [newIngredient, setNewIngredient] = useState('')
-  const [newAllergen, setNewAllergen] = useState('')
-  const [newKeyword, setNewKeyword] = useState('')
-  // const [newImageUrl, setNewImageUrl] = useState('')
+  // 配列入力の状態管理は ArrayInput コンポーネント内で処理
 
   const {
     register,
@@ -35,7 +34,7 @@ export default function NewMenuPage() {
     formState: { errors },
     setValue,
     watch,
-  } = useForm<MenuFormData>({
+  } = useForm({
     resolver: zodResolver(menuSchema),
     defaultValues: {
       ingredients: [],
@@ -45,26 +44,18 @@ export default function NewMenuPage() {
     },
   })
 
-  const ingredients = watch('ingredients')
-  const { allergens, keywords, /* imageUrls, */ ...menuData } = watch()
+  const ingredients = watch('ingredients') || []
+  const watchedData = watch()
+  const allergens = watchedData.allergens || []
+  const keywords = watchedData.keywords || []
 
-  const addItem = (
-    type: 'ingredients' | 'allergens' | 'keywords' | 'imageUrls',
-    value: string,
-    setter: (value: string) => void
-  ) => {
-    if (value.trim()) {
-      const currentItems = watch(type)
-      setValue(type, [...currentItems, value.trim()])
-      setter('')
-    }
+  const addItem = (type: 'ingredients' | 'allergens' | 'keywords' | 'imageUrls', value: string) => {
+    const currentItems = watch(type) || []
+    setValue(type, [...currentItems, value])
   }
 
-  const removeItem = (
-    type: 'ingredients' | 'allergens' | 'keywords' | 'imageUrls',
-    index: number
-  ) => {
-    const currentItems = watch(type)
+  const removeItem = (type: 'ingredients' | 'allergens' | 'keywords' | 'imageUrls', index: number) => {
+    const currentItems = watch(type) || []
     setValue(type, currentItems.filter((_, i) => i !== index))
   }
 
@@ -114,66 +105,46 @@ export default function NewMenuPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               基本情報
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  メニュー名 *
-                </label>
+              <FormField label="メニュー名" required error={errors.name?.message}>
                 <input
                   {...register('name')}
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="例: カフェラテ"
                 />
-                {errors.name && (
-                  <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>
-                )}
-              </div>
+              </FormField>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  カテゴリ *
-                </label>
+              <FormField label="カテゴリ" required error={errors.category?.message}>
                 <select
                   {...register('category')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">カテゴリを選択</option>
-                  <option value="ドリンク">ドリンク</option>
-                  <option value="フード">フード</option>
-                  <option value="デザート">デザート</option>
-                  <option value="サイド">サイド</option>
+                  {MENU_CATEGORIES.map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
                 </select>
-                {errors.category && (
-                  <p className="text-red-600 text-sm mt-1">{errors.category.message}</p>
-                )}
-              </div>
+              </FormField>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  説明 *
-                </label>
-                <textarea
-                  {...register('description')}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="メニューの詳細説明を入力してください"
-                />
-                {errors.description && (
-                  <p className="text-red-600 text-sm mt-1">{errors.description.message}</p>
-                )}
+                <FormField label="説明" required error={errors.description?.message}>
+                  <textarea
+                    {...register('description')}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="メニューの詳細説明を入力してください"
+                  />
+                </FormField>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  価格 (円)
-                </label>
+              <FormField label="価格 (円)" error={errors.price?.message}>
                 <input
                   {...register('price', { valueAsNumber: true })}
                   type="number"
@@ -181,156 +152,36 @@ export default function NewMenuPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="例: 450"
                 />
-                {errors.price && (
-                  <p className="text-red-600 text-sm mt-1">{errors.price.message}</p>
-                )}
-              </div>
+              </FormField>
             </div>
           </div>
 
-          {/* Ingredients */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              原材料
-            </h2>
-            
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={newIngredient}
-                onChange={(e) => setNewIngredient(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="原材料を入力"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addItem('ingredients', newIngredient, setNewIngredient)
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => addItem('ingredients', newIngredient, setNewIngredient)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+          <ArrayInput
+            label="原材料"
+            placeholder="原材料を入力"
+            items={ingredients}
+            onAdd={(item) => addItem('ingredients', item)}
+            onRemove={(index) => removeItem('ingredients', index)}
+            colorScheme="blue"
+          />
 
-            <div className="flex flex-wrap gap-2">
-              {ingredients.map((ingredient, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                >
-                  {ingredient}
-                  <button
-                    type="button"
-                    onClick={() => removeItem('ingredients', index)}
-                    className="hover:bg-blue-200 rounded-full p-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
+          <ArrayInput
+            label="アレルゲン"
+            placeholder="アレルゲンを入力"
+            items={allergens}
+            onAdd={(item) => addItem('allergens', item)}
+            onRemove={(index) => removeItem('allergens', index)}
+            colorScheme="red"
+          />
 
-          {/* Allergens */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              アレルゲン
-            </h2>
-            
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={newAllergen}
-                onChange={(e) => setNewAllergen(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="アレルゲンを入力"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addItem('allergens', newAllergen, setNewAllergen)
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => addItem('allergens', newAllergen, setNewAllergen)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {allergens.map((allergen, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
-                >
-                  {allergen}
-                  <button
-                    type="button"
-                    onClick={() => removeItem('allergens', index)}
-                    className="hover:bg-red-200 rounded-full p-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Keywords */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              検索キーワード
-            </h2>
-            
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={newKeyword}
-                onChange={(e) => setNewKeyword(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="検索キーワードを入力"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addItem('keywords', newKeyword, setNewKeyword)
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => addItem('keywords', newKeyword, setNewKeyword)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {keywords.map((keyword, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-                >
-                  {keyword}
-                  <button
-                    type="button"
-                    onClick={() => removeItem('keywords', index)}
-                    className="hover:bg-green-200 rounded-full p-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
+          <ArrayInput
+            label="検索キーワード"
+            placeholder="検索キーワードを入力"
+            items={keywords}
+            onAdd={(item) => addItem('keywords', item)}
+            onRemove={(index) => removeItem('keywords', index)}
+            colorScheme="green"
+          />
 
           {/* Submit */}
           <div className="flex justify-end gap-4">
@@ -340,13 +191,12 @@ export default function NewMenuPage() {
             >
               キャンセル
             </Link>
-            <button
+            <LoadingButton
               type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={isSubmitting}
             >
-              {isSubmitting ? '作成中...' : 'メニューを作成'}
-            </button>
+              メニューを作成
+            </LoadingButton>
           </div>
         </form>
       </div>

@@ -105,23 +105,104 @@ export async function POST(request: NextRequest) {
         const imageBuffer = Buffer.from(imageData.split(',')[1], 'base64')
         console.log('📷 画像バッファサイズ:', imageBuffer.length, 'bytes')
         
-        const [result] = await client.labelDetection({
+        // 複数の検出方法を組み合わせて使用
+        const [labelResult] = await client.labelDetection({
           image: { content: imageBuffer },
         })
         
-        console.log('🎯 Vision API生レスポンス:', result)
+        // オブジェクト検出とテキスト検出を安全に実行
+        let objectResult: any = { localizedObjectAnnotations: [] }
+        let textResult: any = { textAnnotations: [] }
         
-        const labels = result.labelAnnotations
-        if (labels && labels.length > 0) {
-          detectedItems = labels.map((label: any) => label.description)
-          confidence = labels[0]?.score || 0.7
+        try {
+          if (client.objectLocalization) {
+            [objectResult] = await client.objectLocalization({
+              image: { content: imageBuffer },
+            })
+          }
+        } catch (objError) {
+          console.warn('⚠️ オブジェクト検出をスキップ:', objError)
+        }
+        
+        try {
+          if (client.textDetection) {
+            [textResult] = await client.textDetection({
+              image: { content: imageBuffer },
+            })
+          }
+        } catch (textError) {
+          console.warn('⚠️ テキスト検出をスキップ:', textError)
+        }
+        
+        console.log('🎯 Vision API生レスポンス:')
+        console.log('  - Labels:', labelResult.labelAnnotations?.map((l: any) => `${l.description} (${l.score?.toFixed(2)})`))
+        console.log('  - Objects:', objectResult.localizedObjectAnnotations?.map((o: any) => `${o.name} (${o.score?.toFixed(2)})`))
+        console.log('  - Text:', textResult.textAnnotations?.[0]?.description?.substring(0, 100))
+        
+        // 検出されたアイテムを統合
+        const allDetectedItems: string[] = []
+        
+        // ラベル検出結果（信頼度0.6以上）
+        if (labelResult.labelAnnotations) {
+          const relevantLabels = labelResult.labelAnnotations
+            .filter((label: any) => (label.score || 0) >= 0.6)
+            .map((label: any) => label.description)
+          allDetectedItems.push(...relevantLabels)
+        }
+        
+        // オブジェクト検出結果（信頼度0.5以上）
+        if (objectResult.localizedObjectAnnotations) {
+          const relevantObjects = objectResult.localizedObjectAnnotations
+            .filter((obj: any) => (obj.score || 0) >= 0.5)
+            .map((obj: any) => obj.name)
+          allDetectedItems.push(...relevantObjects)
+        }
+        
+        // テキスト検出から料理名を抽出
+        if (textResult?.textAnnotations && textResult.textAnnotations[0]) {
+          const detectedText = textResult.textAnnotations[0].description || ''
+          const foodKeywords = ['ケーキ', 'チョコ', 'パン', 'サラダ', 'コーヒー', 'cake', 'chocolate', 'bread', 'salad', 'coffee']
+          const textKeywords = foodKeywords.filter(keyword => 
+            detectedText.toLowerCase().includes(keyword.toLowerCase())
+          )
+          allDetectedItems.push(...textKeywords)
+        }
+        
+        // 食べ物関連キーワードの優先度付け
+        const foodRelatedKeywords = [
+          'cake', 'chocolate', 'dessert', 'sweet', 'food', 'dish', 'plate',
+          'ケーキ', 'チョコレート', 'デザート', '甘い', '食べ物', '料理', '皿'
+        ]
+        
+        if (allDetectedItems.length > 0) {
+          // 重複を除去
+          const uniqueItems = [...new Set(allDetectedItems)]
+          
+          // 食べ物関連のキーワードを優先してソート
+          detectedItems = uniqueItems.sort((a, b) => {
+            const aIsFoodRelated = foodRelatedKeywords.some(keyword => 
+              a.toLowerCase().includes(keyword.toLowerCase())
+            )
+            const bIsFoodRelated = foodRelatedKeywords.some(keyword => 
+              b.toLowerCase().includes(keyword.toLowerCase())
+            )
+            
+            if (aIsFoodRelated && !bIsFoodRelated) return -1
+            if (!aIsFoodRelated && bIsFoodRelated) return 1
+            return 0
+          })
+          
+          confidence = Math.max(
+            labelResult.labelAnnotations?.[0]?.score || 0,
+            objectResult?.localizedObjectAnnotations?.[0]?.score || 0
+          )
           usingVisionAPI = true
           
-          console.log('🔍 Google Vision API検出成功:', detectedItems)
-          console.log('🎯 信頼度:', confidence)
+          console.log('🔍 統合検出結果:', detectedItems)
+          console.log('🎯 最高信頼度:', confidence)
         } else {
-          console.warn('⚠️ Vision API: ラベルが検出されませんでした')
-          throw new Error('No labels detected')
+          console.warn('⚠️ Vision API: 有効なアイテムが検出されませんでした')
+          throw new Error('No relevant items detected')
         }
         
       } catch (visionError: any) {
@@ -165,35 +246,128 @@ export async function POST(request: NextRequest) {
       if (detectedItems.length > 0) {
         console.log(`🔍 検索キーワード: ${detectedItems.join(', ')}`)
         
-        // より柔軟な検索クエリ
-        const searchQueries = detectedItems.map(item => 
-          `keywords.cs.["${item}"],visual_keywords.cs.["${item}"],name.ilike.%${item}%,description.ilike.%${item}%`
+        // スマートなキーワードマッピング（コンテキスト重視）
+        const keywordMappings: { [key: string]: string[] } = {
+          'cake': ['ケーキ', 'デザート', 'スイーツ'],
+          'chocolate': ['チョコレート', 'チョコ', 'カカオ'],
+          'dessert': ['デザート', 'ケーキ', 'スイーツ'],
+          'sweet': ['甘い', 'デザート', 'スイーツ'],
+          'food': ['料理', '食べ物', 'メニュー'],
+          'dish': ['料理', '皿', '一品'],
+          'plate': ['皿', 'プレート'],
+          'brown': ['茶色', 'チョコレート', 'コーヒー'],
+          'dark': ['暗い', 'チョコレート', 'ビター'],
+          'baked': ['焼いた', 'ベーキング', 'オーブン'],
+          'flour': ['小麦粉', 'パン', 'ケーキ']
+        }
+        
+        // 色だけのキーワードは除外（コンテキストが不明確なため）
+        const colorOnlyKeywords = ['white', 'black', 'red', 'green', 'blue', 'yellow']
+        const filteredItems = detectedItems.filter(item => 
+          !colorOnlyKeywords.includes(item.toLowerCase())
         )
         
-        const result = await supabaseAdmin
+        // 拡張キーワードを生成（フィルタリング済みアイテムから）
+        const expandedKeywords: string[] = []
+        
+        // フィルタリングされたアイテムがない場合は、デザート関連で検索
+        if (filteredItems.length === 0) {
+          console.log('🎂 色のみ検出のため、デザート系で検索します')
+          expandedKeywords.push('デザート', 'ケーキ', 'スイーツ', 'dessert', 'cake', 'sweet')
+        } else {
+          filteredItems.forEach(item => {
+            expandedKeywords.push(item.toLowerCase())
+            const mappedKeywords = keywordMappings[item.toLowerCase()]
+            if (mappedKeywords) {
+              expandedKeywords.push(...mappedKeywords)
+            }
+          })
+        }
+        
+        console.log(`🔍 フィルタリング後: ${filteredItems.join(', ')}`)
+        console.log(`🔍 拡張キーワード: ${expandedKeywords.join(', ')}`)
+        
+        // 最初に精密な検索を試行（JSONB配列用のcontains演算子を使用）
+        let preciseResult = await supabaseAdmin
           .from('dishes')
           .select('*')
           .eq('available', true)
-          .or(searchQueries.join(','))
+          .or(expandedKeywords.map(keyword => 
+            `keywords.cs.["${keyword}"],visual_keywords.cs.["${keyword}"],name.ilike.%${keyword}%,description.ilike.%${keyword}%`
+          ).join(','))
           .limit(5)
-        data = result.data
-        error = result.error
         
-        console.log(`📊 検索結果: ${data?.length || 0}件`)
+        data = preciseResult.data
+        error = preciseResult.error
         
-        // 検索結果が少ない場合は、ランダム選択でフォールバック
-        if (!data || data.length === 0) {
-          console.log('🎲 ランダム選択にフォールバック')
-          const randomResult = await supabaseAdmin
+        console.log(`📊 精密検索結果: ${data?.length || 0}件`)
+        
+        // 精密検索で結果が少ない場合は、カテゴリベースの検索
+        if (!data || data.length < 2) {
+          console.log('🔍 カテゴリベース検索にフォールバック')
+          
+          // デザート系の検索を優先
+          const dessertResult = await supabaseAdmin
             .from('dishes')
             .select('*')
             .eq('available', true)
+            .eq('category', 'デザート')
+            .limit(3)
           
-          if (randomResult.data && randomResult.data.length > 0) {
-            const shuffled = randomResult.data.sort(() => Math.random() - 0.5)
-            data = shuffled.slice(0, 3)
-            console.log('🎲 ランダム結果:', data.map(d => d.name))
+          if (dessertResult.data && dessertResult.data.length > 0) {
+            data = [...(data || []), ...dessertResult.data]
+            console.log(`📊 デザート検索結果: ${dessertResult.data.length}件追加`)
+          } else {
+            // デザートがない場合は幅広い検索
+            const broadResult = await supabaseAdmin
+              .from('dishes')
+              .select('*')
+              .eq('available', true)
+              .or(`keywords.cs.["ケーキ"],keywords.cs.["cake"],keywords.cs.["チョコレート"],keywords.cs.["chocolate"],keywords.cs.["デザート"],keywords.cs.["dessert"]`)
+              .limit(5)
+            
+            if (broadResult.data && broadResult.data.length > 0) {
+              data = [...(data || []), ...broadResult.data]
+              console.log(`📊 幅広い検索結果: ${broadResult.data.length}件追加`)
+            }
           }
+        }
+        
+        // 最終的なフォールバック: 人気料理を取得
+        if (!data || data.length === 0) {
+          console.log('🎲 人気料理にフォールバック')
+          const popularResult = await supabaseAdmin
+            .from('dishes')
+            .select('*')
+            .eq('available', true)
+            .eq('popular', true)
+            .limit(3)
+          
+          if (popularResult.data && popularResult.data.length > 0) {
+            data = popularResult.data
+            console.log('🎲 人気料理:', data.map((d: any) => d.name))
+          } else {
+            // 最終手段: ランダム選択
+            const randomResult = await supabaseAdmin
+              .from('dishes')
+              .select('*')
+              .eq('available', true)
+              .limit(10)
+            
+            if (randomResult.data && randomResult.data.length > 0) {
+              const shuffled = randomResult.data.sort(() => Math.random() - 0.5)
+              data = shuffled.slice(0, 3)
+              console.log('🎲 ランダム結果:', data.map((d: any) => d.name))
+            }
+          }
+        }
+        
+        // 重複を除去し、上位3件に絞る
+        if (data && data.length > 0) {
+          const uniqueData = data.filter((dish: any, index: number, self: any[]) => 
+            index === self.findIndex((d: any) => d.id === dish.id)
+          )
+          data = uniqueData.slice(0, 3)
         }
       } else {
         // キーワードがない場合は人気順で取得

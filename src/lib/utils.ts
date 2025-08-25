@@ -6,10 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(price: number): string {
-  return new Intl.NumberFormat('ja-JP', {
-    style: 'currency',
-    currency: 'JPY',
-  }).format(price)
+  return `¥${price.toLocaleString()}`
 }
 
 export function formatDate(date: Date): string {

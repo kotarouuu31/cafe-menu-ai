@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Camera, Upload, Loader2, AlertCircle, RefreshCw, RotateCcw, Sparkles } from 'lucide-react'
 import { ImageAnalysisResult, Dish } from '@/types/menu'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice } from '@/lib/menu-utils'
 import PWAInstall from '@/components/PWAInstall'
 
 // 安全な配列変換関数
@@ -303,16 +303,16 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
       <div className="max-w-md mx-auto">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-            <h1 className="text-2xl font-bold text-center flex items-center justify-center gap-2">
-              <Sparkles className="w-6 h-6" />
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 text-white">
+            <h1 className="text-xl sm:text-2xl font-bold text-center flex items-center justify-center gap-2">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
               Cafe Menu AI
             </h1>
-            <p className="text-center text-blue-100 mt-2">
+            <p className="text-center text-blue-100 mt-2 text-sm sm:text-base">
               カメラでメニューを撮影して詳細情報を確認
             </p>
           </div>
@@ -632,55 +632,146 @@ export default function Home() {
               {analysisResult.suggestedDishes.length > 0 ? (
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">
-                    おすすめ料理 ({analysisResult.suggestedDishes.length}件)
+                    マッチした料理 ({analysisResult.suggestedDishes.length}件)
                   </h4>
                   <div className="space-y-4">
                     {analysisResult.suggestedDishes.map((dish: Dish) => (
-                      <div key={dish.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
-                        <div className="flex justify-between items-start mb-2">
-                          <h5 className="font-semibold text-gray-800">{dish.name}</h5>
-                          {dish.price && (
-                            <span className="text-blue-600 font-bold text-lg">
-                              ¥{formatPrice(dish.price)}
-                            </span>
+                      <div key={dish.id} className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
+                        {/* Header with name and price */}
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 border-b border-gray-100">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                            <div className="flex-1">
+                              <h5 className="font-bold text-lg sm:text-xl text-gray-800 mb-1">{dish.name}</h5>
+                              {dish.name_en && (
+                                <p className="text-gray-500 text-sm italic">{dish.name_en}</p>
+                              )}
+                            </div>
+                            {dish.price && (
+                              <div className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-full self-start">
+                                <span className="font-bold text-base sm:text-lg">¥{formatPrice(dish.price)}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {dish.category && (
+                            <div className="mt-3">
+                              <span className="inline-block bg-white text-blue-600 px-3 py-1 rounded-full text-sm font-medium shadow-sm">
+                                {dish.category}
+                              </span>
+                            </div>
                           )}
                         </div>
-                        <p className="text-gray-600 text-sm mb-3">{dish.description}</p>
-                        
-                        {dish.category && (
-                          <div className="mb-2">
-                            <span className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                              {dish.category}
-                            </span>
+
+                        {/* Main content */}
+                        <div className="p-4 space-y-4">
+                          {/* Description */}
+                          <div>
+                            <p className="text-gray-700 leading-relaxed">{dish.description}</p>
                           </div>
-                        )}
-                        
-                        {/* 店舗からのコメント */}
-                        {dish.chef_comment && (
-                          <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
-                            <p className="text-sm text-yellow-800">
-                              <span className="font-medium">シェフから:</span> {dish.chef_comment}
-                            </p>
-                          </div>
-                        )}
-                        
-                        {/* アレルゲン情報 */}
-                        {dish.allergens.length > 0 && (
-                          <div className="mt-2">
-                            <span className="text-red-600 text-sm font-medium">
-                              アレルゲン: {dish.allergens.join(', ')}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {/* 食材情報 */}
-                        {dish.ingredients.length > 0 && (
-                          <div className="mt-2">
-                            <span className="text-green-600 text-sm">
-                              食材: {dish.ingredients.join(', ')}
-                            </span>
-                          </div>
-                        )}
+
+                          {/* Chef's comment - Enhanced */}
+                          {dish.chef_comment && (
+                            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 rounded-r-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-amber-100 rounded-full p-2 flex-shrink-0">
+                                  <span className="text-amber-600 text-lg">👨‍🍳</span>
+                                </div>
+                                <div>
+                                  <h6 className="font-semibold text-amber-800 mb-1">シェフからのメッセージ</h6>
+                                  <p className="text-amber-700 text-sm leading-relaxed">{dish.chef_comment}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Allergens - Enhanced */}
+                          {safeArrayFromString(dish.allergens || []).length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-red-100 rounded-full p-2 flex-shrink-0">
+                                  <span className="text-red-600 text-lg">⚠️</span>
+                                </div>
+                                <div className="flex-1">
+                                  <h6 className="font-semibold text-red-800 mb-2">アレルギー情報</h6>
+                                  <div className="flex flex-wrap gap-2">
+                                    {safeArrayFromString(dish.allergens || []).map((allergen, index) => (
+                                      <span
+                                        key={index}
+                                        className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium border border-red-200"
+                                      >
+                                        {allergen}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <p className="text-red-600 text-xs mt-2">
+                                    アレルギーをお持ちの方はスタッフまでお声がけください
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Ingredients - Enhanced */}
+                          {safeArrayFromString(dish.ingredients || []).length > 0 && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-green-100 rounded-full p-2 flex-shrink-0">
+                                  <span className="text-green-600 text-lg">🥬</span>
+                                </div>
+                                <div className="flex-1">
+                                  <h6 className="font-semibold text-green-800 mb-2">使用食材</h6>
+                                  <div className="flex flex-wrap gap-2">
+                                    {safeArrayFromString(dish.ingredients || []).map((ingredient, index) => (
+                                      <span
+                                        key={index}
+                                        className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium border border-green-200"
+                                      >
+                                        {ingredient}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Keywords for debugging */}
+                          {safeArrayFromString(dish.keywords || []).length > 0 && (
+                            <details className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                              <summary className="cursor-pointer text-gray-600 text-sm font-medium hover:text-gray-800">
+                                🔍 検索キーワード ({safeArrayFromString(dish.keywords || []).length}個)
+                              </summary>
+                              <div className="mt-3 flex flex-wrap gap-1">
+                                {safeArrayFromString(dish.keywords || []).slice(0, 10).map((keyword, index) => (
+                                  <span
+                                    key={index}
+                                    className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs"
+                                  >
+                                    {keyword}
+                                  </span>
+                                ))}
+                                {safeArrayFromString(dish.keywords || []).length > 10 && (
+                                  <span className="text-gray-500 text-xs px-2 py-1">
+                                    +{safeArrayFromString(dish.keywords || []).length - 10}個
+                                  </span>
+                                )}
+                              </div>
+                            </details>
+                          )}
+
+                          {/* Match score for debugging */}
+                          {(dish as any).matchScore !== undefined && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-blue-600 text-sm">🎯 マッチスコア:</span>
+                                <span className="font-bold text-blue-800">{(dish as any).matchScore}</span>
+                                <span className="text-blue-600 text-sm">
+                                  / 信頼度: {Math.round(((dish as any).confidence || 0) * 100)}%
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

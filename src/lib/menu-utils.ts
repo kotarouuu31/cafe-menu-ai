@@ -72,5 +72,5 @@ export type MenuCategory = typeof MENU_CATEGORIES[number]
  */
 export function formatPrice(price?: number | null): string {
   if (price == null) return '価格未設定'
-  return `¥${price.toLocaleString()}`
+  return price.toLocaleString()
 }

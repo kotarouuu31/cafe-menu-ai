@@ -60,11 +60,16 @@ export async function POST(request: NextRequest) {
       console.warn('⚠️ Supabase環境変数が設定されていません。モックデータを使用します。')
     }
 
-    const { imageData } = await request.json()
+    const formData = await request.formData()
+    const imageFile = formData.get('image') as File
 
-    if (!imageData) {
-      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
+    if (!imageFile) {
+      return NextResponse.json({ error: 'Image file is required' }, { status: 400 })
     }
+
+    // ファイルをBase64に変換
+    const arrayBuffer = await imageFile.arrayBuffer()
+    const imageData = Buffer.from(arrayBuffer).toString('base64')
 
     let detectedItems: string[] = []
     let confidence = 0.7
@@ -248,17 +253,37 @@ export async function POST(request: NextRequest) {
         
         // スマートなキーワードマッピング（コンテキスト重視）
         const keywordMappings: { [key: string]: string[] } = {
+          // デザート系
           'cake': ['ケーキ', 'デザート', 'スイーツ'],
           'chocolate': ['チョコレート', 'チョコ', 'カカオ'],
           'dessert': ['デザート', 'ケーキ', 'スイーツ'],
           'sweet': ['甘い', 'デザート', 'スイーツ'],
+          
+          // パン・サンドイッチ系
+          'sandwich': ['サンドイッチ', 'パン', '軽食', 'ランチ'],
+          'bread': ['パン', '食パン', 'サンドイッチ', '軽食'],
+          'finger food': ['軽食', 'スナック', 'つまみ'],
+          'fast food': ['ファストフード', '軽食', 'ハンバーガー'],
+          'tramezzino': ['サンドイッチ', 'パン', '軽食'],
+          
+          // 飲み物系
+          'coffee': ['コーヒー', 'ドリンク', 'カフェイン'],
+          'drink': ['ドリンク', '飲み物', '飲料'],
+          
+          // 一般的な食べ物
           'food': ['料理', '食べ物', 'メニュー'],
           'dish': ['料理', '皿', '一品'],
           'plate': ['皿', 'プレート'],
-          'brown': ['茶色', 'チョコレート', 'コーヒー'],
-          'dark': ['暗い', 'チョコレート', 'ビター'],
+          'ingredient': ['材料', '食材'],
+          'vegetable': ['野菜', 'サラダ', 'ヘルシー'],
+          
+          // 調理方法
           'baked': ['焼いた', 'ベーキング', 'オーブン'],
-          'flour': ['小麦粉', 'パン', 'ケーキ']
+          'fried': ['揚げた', 'フライ', '油'],
+          
+          // 色・質感（限定的に使用）
+          'brown': ['茶色', 'チョコレート', 'コーヒー'],
+          'dark': ['暗い', 'チョコレート', 'ビター']
         }
         
         // 色だけのキーワードは除外（コンテキストが不明確なため）
@@ -270,10 +295,10 @@ export async function POST(request: NextRequest) {
         // 拡張キーワードを生成（フィルタリング済みアイテムから）
         const expandedKeywords: string[] = []
         
-        // フィルタリングされたアイテムがない場合は、デザート関連で検索
+        // フィルタリングされたアイテムがない場合の処理を改善
         if (filteredItems.length === 0) {
-          console.log('🎂 色のみ検出のため、デザート系で検索します')
-          expandedKeywords.push('デザート', 'ケーキ', 'スイーツ', 'dessert', 'cake', 'sweet')
+          console.log('🎨 色のみ検出のため、一般的な料理で検索します')
+          expandedKeywords.push('料理', '食べ物', 'メニュー', 'food', 'dish')
         } else {
           filteredItems.forEach(item => {
             expandedKeywords.push(item.toLowerCase())
@@ -293,7 +318,7 @@ export async function POST(request: NextRequest) {
           .select('*')
           .eq('available', true)
           .or(expandedKeywords.map(keyword => 
-            `keywords.cs.["${keyword}"],visual_keywords.cs.["${keyword}"],name.ilike.%${keyword}%,description.ilike.%${keyword}%`
+            `keywords.cs.["${keyword}"],name.ilike.%${keyword}%,description.ilike.%${keyword}%`
           ).join(','))
           .limit(5)
         
@@ -302,28 +327,58 @@ export async function POST(request: NextRequest) {
         
         console.log(`📊 精密検索結果: ${data?.length || 0}件`)
         
-        // 精密検索で結果が少ない場合は、カテゴリベースの検索
-        if (!data || data.length < 2) {
-          console.log('🔍 カテゴリベース検索にフォールバック')
+        // 精密検索で結果が少ない場合は、スマートカテゴリ検索（ただし1件以上あれば追加検索は控えめに）
+        if (!data || data.length === 0) {
+          console.log('🔍 スマートカテゴリ検索にフォールバック')
           
-          // デザート系の検索を優先
-          const dessertResult = await supabaseAdmin
-            .from('dishes')
-            .select('*')
-            .eq('available', true)
-            .eq('category', 'デザート')
-            .limit(3)
+          // 検出されたキーワードに基づいてカテゴリを推定
+          const categoryMapping: { [key: string]: string[] } = {
+            'sandwich': ['軽食', 'フード'],
+            'bread': ['軽食', 'フード'],
+            'cake': ['デザート'],
+            'dessert': ['デザート'],
+            'coffee': ['ドリンク'],
+            'salad': ['サラダ'],
+            'pasta': ['フード']
+          }
           
-          if (dessertResult.data && dessertResult.data.length > 0) {
-            data = [...(data || []), ...dessertResult.data]
-            console.log(`📊 デザート検索結果: ${dessertResult.data.length}件追加`)
-          } else {
-            // デザートがない場合は幅広い検索
+          let targetCategories: string[] = []
+          filteredItems.forEach(item => {
+            const categories = categoryMapping[item.toLowerCase()]
+            if (categories) {
+              targetCategories.push(...categories)
+            }
+          })
+          
+          // 重複除去
+          targetCategories = [...new Set(targetCategories)]
+          
+          if (targetCategories.length > 0) {
+            console.log(`🎯 推定カテゴリ: ${targetCategories.join(', ')}`)
+            
+            for (const category of targetCategories) {
+              const categoryResult = await supabaseAdmin
+                .from('dishes')
+                .select('*')
+                .eq('available', true)
+                .eq('category', category)
+                .limit(3)
+              
+              if (categoryResult.data && categoryResult.data.length > 0) {
+                data = [...(data || []), ...categoryResult.data]
+                console.log(`📊 ${category}カテゴリ検索結果: ${categoryResult.data.length}件追加`)
+                break // 最初にマッチしたカテゴリで十分
+              }
+            }
+          }
+          
+          // まだ結果が少ない場合は、幅広いキーワード検索
+          if (!data || data.length < 2) {
             const broadResult = await supabaseAdmin
               .from('dishes')
               .select('*')
               .eq('available', true)
-              .or(`keywords.cs.["ケーキ"],keywords.cs.["cake"],keywords.cs.["チョコレート"],keywords.cs.["chocolate"],keywords.cs.["デザート"],keywords.cs.["dessert"]`)
+              .or(`keywords.cs.["軽食"],keywords.cs.["サンドイッチ"],keywords.cs.["パン"],keywords.cs.["ケーキ"],keywords.cs.["デザート"]`)
               .limit(5)
             
             if (broadResult.data && broadResult.data.length > 0) {

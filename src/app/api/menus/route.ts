@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { convertMenuForFrontend } from '@/lib/menu-utils'
 import { createErrorResponse, withErrorHandler } from '@/lib/error-handler'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const createMenuSchema = z.object({
   name: z.string().min(1),
@@ -63,9 +69,49 @@ const fallbackMenus = [
 // 重複削除：convertMenuForFrontend は menu-utils.ts に移動
 
 export const GET = withErrorHandler(async () => {
-  // Supabaseのみを使用するため、フォールバックメニューを直接返す
-  // fallbackMenusは既にMenu形式なので変換不要
-  return NextResponse.json({ menus: fallbackMenus })
+  try {
+    // Supabaseから料理データを取得
+    const { data: dishes, error } = await supabaseAdmin
+      .from('dishes')
+      .select('*')
+      .eq('available', true)
+      .order('updated_at', { ascending: false })
+
+    if (error) {
+      console.error('Supabase取得エラー:', error)
+      // エラー時はフォールバックデータを返す
+      return NextResponse.json({ 
+        success: true,
+        menus: fallbackMenus,
+        source: 'fallback'
+      })
+    }
+
+    // データが存在しない場合もフォールバック
+    if (!dishes || dishes.length === 0) {
+      return NextResponse.json({ 
+        success: true,
+        menus: fallbackMenus,
+        source: 'fallback'
+      })
+    }
+
+    // Supabaseデータを返す
+    return NextResponse.json({ 
+      success: true,
+      menus: dishes,
+      source: 'supabase'
+    })
+
+  } catch (error) {
+    console.error('メニュー取得エラー:', error)
+    // エラー時はフォールバックデータを返す
+    return NextResponse.json({ 
+      success: true,
+      menus: fallbackMenus,
+      source: 'fallback'
+    })
+  }
 }, 'メニュー取得に失敗しました')
 
 export const POST = withErrorHandler(async (request: NextRequest) => {

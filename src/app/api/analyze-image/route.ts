@@ -2,50 +2,49 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ImageAnalysisResult } from '@/types/menu'
 
-// 改善されたモック画像解析：より多様で現実的な結果
-function mockImageAnalysis(): { detectedItems: string[]; confidence: number } {
+// 改善されたモック画像解析：画像データに基づく一貫性のある結果
+function mockImageAnalysis(imageData: string): { detectedItems: string[]; confidence: number } {
+  // 画像データのハッシュ値を使用して一貫性のある結果を生成
+  const imageHash = imageData.slice(-10) // 最後の10文字を使用
+  const hashSum = imageHash.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  
   const analysisPatterns = [
     // コーヒー系
     {
-      keywords: ['コーヒー', 'coffee', 'ドリンク', '黒い', '液体'],
+      keywords: ['coffee', 'drink', 'beverage'],
       confidence: 0.85
     },
     // ケーキ系
     {
-      keywords: ['ケーキ', 'cake', 'デザート', '甘い', '白い'],
+      keywords: ['cake', 'dessert', 'sweet'],
       confidence: 0.8
     },
     // サンドイッチ系
     {
-      keywords: ['サンドイッチ', 'sandwich', 'パン', '軽食', '四角い'],
+      keywords: ['sandwich', 'bread', 'food'],
       confidence: 0.75
     },
     // サラダ系
     {
-      keywords: ['サラダ', 'salad', '野菜', '緑の', 'ヘルシー'],
+      keywords: ['salad', 'vegetable', 'healthy'],
       confidence: 0.7
     },
     // パンケーキ系
     {
-      keywords: ['パンケーキ', 'pancake', 'フルーツ', '丸い', '重なった'],
+      keywords: ['pancake', 'breakfast', 'syrup'],
       confidence: 0.8
     },
-    // カプチーノ系
+    // 一般的な食べ物（低信頼度）
     {
-      keywords: ['カプチーノ', 'cappuccino', 'ミルク', '泡', 'クリーミー'],
-      confidence: 0.82
-    },
-    // 一般的な食べ物
-    {
-      keywords: ['food', '食べ物', 'dish', '料理'],
-      confidence: 0.6
+      keywords: ['food', 'dish'],
+      confidence: 0.4
     }
   ]
   
-  const randomIndex = Math.floor(Math.random() * analysisPatterns.length)
-  const selected = analysisPatterns[randomIndex]
+  const patternIndex = hashSum % analysisPatterns.length
+  const selected = analysisPatterns[patternIndex]
   
-  console.log(`🎲 モック解析: ${selected.keywords.join(', ')} (信頼度: ${selected.confidence})`)
+  console.log(`🎲 モック解析 (一貫性): ${selected.keywords.join(', ')} (信頼度: ${selected.confidence})`)
   
   return {
     detectedItems: selected.keywords,
@@ -214,7 +213,7 @@ export async function POST(request: NextRequest) {
         })
         
         // フォールバックでモックデータを使用
-        const mockResult = mockImageAnalysis()
+        const mockResult = mockImageAnalysis(imageData)
         detectedItems = mockResult.detectedItems
         confidence = mockResult.confidence
         console.log('🔄 モックデータにフォールバック:', detectedItems)
@@ -227,7 +226,7 @@ export async function POST(request: NextRequest) {
       })
       
       // モックデータ
-      const mockResult = mockImageAnalysis()
+      const mockResult = mockImageAnalysis(imageData)
       detectedItems = mockResult.detectedItems
       confidence = mockResult.confidence
       console.log('🔮 モックデータを使用中:', detectedItems)
@@ -307,20 +306,52 @@ export async function POST(request: NextRequest) {
         console.log(`🔍 フィルタリング後: ${filteredItems.join(', ')}`)
         console.log(`🔍 拡張キーワード: ${expandedKeywords.join(', ')}`)
         
-        // 最初に精密な検索を試行（JSONB配列用のcontains演算子を使用）
-        let preciseResult = await supabaseAdmin
-          .from('dishes')
-          .select('*')
-          .eq('available', true)
-          .or(expandedKeywords.map(keyword => 
-            `keywords.cs.["${keyword}"],name.ilike.%${keyword}%,description.ilike.%${keyword}%`
-          ).join(','))
-          .limit(5)
+        // 段階的検索アプローチ
+        let searchResults: any[] = []
         
-        data = preciseResult.data
-        error = preciseResult.error
+        // Step 1: 完全一致検索（最も信頼度が高い）
+        console.log('🎯 Step 1: 完全一致検索')
+        for (const keyword of expandedKeywords.slice(0, 3)) { // 上位3キーワードのみ
+          const exactResult = await supabaseAdmin
+            .from('dishes')
+            .select('*')
+            .eq('available', true)
+            .or(`keywords.cs.["${keyword}"],name.ilike.%${keyword}%`)
+            .limit(3)
+          
+          if (exactResult.data && exactResult.data.length > 0) {
+            searchResults.push(...exactResult.data.map((dish: any) => ({
+              ...dish,
+              searchType: 'exact',
+              matchedKeyword: keyword
+            })))
+            console.log(`✅ "${keyword}" で ${exactResult.data.length}件発見`)
+          }
+        }
         
-        console.log(`📊 精密検索結果: ${data?.length || 0}件`)
+        // Step 2: 部分一致検索（完全一致で十分な結果がない場合のみ）
+        if (searchResults.length < 2) {
+          console.log('🔍 Step 2: 部分一致検索')
+          const partialResult = await supabaseAdmin
+            .from('dishes')
+            .select('*')
+            .eq('available', true)
+            .or(expandedKeywords.slice(0, 5).map(keyword => 
+              `description.ilike.%${keyword}%,chef_comment.ilike.%${keyword}%`
+            ).join(','))
+            .limit(3)
+          
+          if (partialResult.data && partialResult.data.length > 0) {
+            searchResults.push(...partialResult.data.map((dish: any) => ({
+              ...dish,
+              searchType: 'partial'
+            })))
+            console.log(`📊 部分一致で ${partialResult.data.length}件追加`)
+          }
+        }
+        
+        data = searchResults
+        console.log(`📊 総検索結果: ${data?.length || 0}件`)
         
         // 精密検索で結果が少ない場合は、スマートカテゴリ検索（ただし1件以上あれば追加検索は控えめに）
         if (!data || data.length === 0) {
@@ -383,33 +414,83 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        // 最終的なフォールバック: 人気料理を取得
-        if (!data || data.length === 0) {
-          console.log('🎲 人気料理にフォールバック')
-          const popularResult = await supabaseAdmin
-            .from('dishes')
-            .select('*')
-            .eq('available', true)
-            .eq('popular', true)
-            .limit(3)
+        // 検索結果の信頼度評価
+        if (data && data.length > 0) {
+          console.log('🔍 検索結果の詳細分析開始')
+          console.log('🔍 検出キーワード:', expandedKeywords)
+          console.log('🔍 検索結果数:', data.length)
           
-          if (popularResult.data && popularResult.data.length > 0) {
-            data = popularResult.data
-            console.log('🎲 人気料理:', data.map((d: any) => d.name))
-          } else {
-            // 最終手段: ランダム選択
-            const randomResult = await supabaseAdmin
-              .from('dishes')
-              .select('*')
-              .eq('available', true)
-              .limit(10)
+          // 各料理に信頼度スコアを追加
+          data = data.map((dish: any, index: number) => {
+            let matchScore = 0
+            const dishKeywords = [...(dish.keywords || []), dish.name.toLowerCase(), dish.description.toLowerCase()]
             
-            if (randomResult.data && randomResult.data.length > 0) {
-              const shuffled = randomResult.data.sort(() => Math.random() - 0.5)
-              data = shuffled.slice(0, 3)
-              console.log('🎲 ランダム結果:', data.map((d: any) => d.name))
+            console.log(`\n🍽️ 料理${index + 1}: ${dish.name}`)
+            console.log(`   DBキーワード:`, dish.keywords)
+            console.log(`   全検索対象:`, dishKeywords)
+            
+            // 汎用キーワードを除外してマッチング度を計算
+            const genericKeywords = ['food', 'dish', 'ingredient', 'recipe', 'cooking', 'tableware', '料理', '食べ物', 'メニュー']
+            
+            expandedKeywords.forEach(keyword => {
+              // 汎用キーワードは除外
+              if (genericKeywords.includes(keyword.toLowerCase())) {
+                console.log(`   ⚠️ 汎用キーワードのため除外: "${keyword}"`)
+                return
+              }
+              
+              const matched = dishKeywords.some(dk => dk.toLowerCase().includes(keyword.toLowerCase()))
+              if (matched) {
+                matchScore += 1
+                console.log(`   ✅ マッチ: "${keyword}"`)
+              } else {
+                console.log(`   ❌ 不一致: "${keyword}"`)
+              }
+            })
+            
+            console.log(`   📊 最終マッチスコア: ${matchScore}/${expandedKeywords.length}`)
+            
+            return {
+              ...dish,
+              matchScore,
+              confidence: Math.min(confidence * (matchScore / Math.max(expandedKeywords.length, 1)), 1)
             }
+          })
+          
+          // 信頼度でソート
+          data.sort((a: any, b: any) => b.matchScore - a.matchScore)
+          
+          console.log('\n📊 最終スコア一覧:', data.map((d: any) => `${d.name}: ${d.matchScore}/${expandedKeywords.length}`))
+        }
+        
+        // 厳格な信頼度フィルタリング
+        const minMatchScore = 1 // 最低1つのキーワードマッチが必要
+        if (data && data.length > 0) {
+          console.log('\n🔍 フィルタリング前の全料理:')
+          data.forEach((dish: any, i: number) => {
+            console.log(`  ${i + 1}. ${dish.name} - スコア: ${dish.matchScore} (${dish.matchScore >= minMatchScore ? '✅通過' : '❌除外'})`)
+          })
+          
+          const strictResults = data.filter((dish: any) => 
+            dish.matchScore >= minMatchScore
+          )
+          
+          console.log(`\n🔍 フィルタリング結果: ${data.length}件 → ${strictResults.length}件`)
+          
+          if (strictResults.length > 0) {
+            data = strictResults
+            console.log(`✅ 厳格フィルタリング後: ${data.length}件 (マッチスコア≥${minMatchScore})`)
+            console.log('✅ 通過した料理:', data.map(d => `${d.name}(${d.matchScore})`).join(', '))
+          } else {
+            console.log('⚠️ マッチスコアが低すぎるため結果をクリア')
+            data = []
           }
+        }
+        
+        // フォールバックを完全に無効化（精度重視）
+        if (!data || data.length === 0) {
+          console.log('🚫 マッチする料理が見つかりません - フォールバック無効')
+          data = []
         }
         
         // 重複を除去し、上位3件に絞る
@@ -420,16 +501,10 @@ export async function POST(request: NextRequest) {
           data = uniqueData.slice(0, 3)
         }
       } else {
-        // キーワードがない場合は人気順で取得
-        console.log('📋 キーワードなし、人気料理を取得します')
-        const result = await supabaseAdmin
-          .from('dishes')
-          .select('*')
-          .eq('available', true)
-          .eq('popular', true)
-          .limit(3)
-        data = result.data
-        error = result.error
+        // キーワードがない場合は結果なし（精度重視）
+        console.log('🚫 キーワードなし - 結果なし')
+        data = []
+        error = null
       }
 
       if (error) {

@@ -87,17 +87,17 @@ npm run dev
 アプリケーションの動作確認には、以下の料理画像をご利用ください。これらの料理はデータベースに登録済みで、AI解析によって正確に認識されます。
 
 ### 1. ティラミス
-<img src="https://github.com/user-attachments/assets/tiramisu-sample.jpg" width="300" alt="ティラミス">
+![ティラミス](https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=300&h=200&fit=crop&crop=center)
 
 **特徴**: イタリアンデザートの代表格。マスカルポーネチーズとコーヒーの風味が特徴的な層状のデザート。
 
 ### 2. アボカドトースト  
-<img src="https://github.com/user-attachments/assets/avocado-toast-sample.jpg" width="300" alt="アボカドトースト">
+![アボカドトースト](https://images.unsplash.com/photo-1525351484163-7529414344d8?w=300&h=200&fit=crop&crop=center)
 
 **特徴**: 新鮮なアボカドとポーチドエッグの栄養満点トースト。ヘルシー志向の方に人気の軽食メニュー。
 
 ### 3. ガーリックシュリンプ
-<img src="https://github.com/user-attachments/assets/garlic-shrimp-sample.jpg" width="300" alt="ガーリックシュリンプ">
+![ガーリックシュリンプ](https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300&h=200&fit=crop&crop=center)
 
 **特徴**: プリプリのエビをガーリックバターで炒めた香り豊かな一品。ビールやワインとの相性も抜群。
 

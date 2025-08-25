@@ -245,179 +245,66 @@ export async function POST(request: NextRequest) {
       if (detectedItems.length > 0) {
         console.log(`🔍 検索キーワード: ${detectedItems.join(', ')}`)
         
-        // スマートなキーワードマッピング（コンテキスト重視）
-        const keywordMappings: { [key: string]: string[] } = {
-          // デザート系
-          'cake': ['ケーキ', 'デザート', 'スイーツ'],
-          'chocolate': ['チョコレート', 'チョコ', 'カカオ'],
-          'dessert': ['デザート', 'ケーキ', 'スイーツ'],
-          'sweet': ['甘い', 'デザート', 'スイーツ'],
-          
-          // パン・サンドイッチ系
-          'sandwich': ['サンドイッチ', 'パン', '軽食', 'ランチ'],
-          'bread': ['パン', '食パン', 'サンドイッチ', '軽食'],
-          'finger food': ['軽食', 'スナック', 'つまみ'],
-          'fast food': ['ファストフード', '軽食', 'ハンバーガー'],
-          'tramezzino': ['サンドイッチ', 'パン', '軽食'],
-          
-          // 飲み物系
-          'coffee': ['コーヒー', 'ドリンク', 'カフェイン'],
-          'drink': ['ドリンク', '飲み物', '飲料'],
-          
-          // 一般的な食べ物
-          'food': ['料理', '食べ物', 'メニュー'],
-          'dish': ['料理', '皿', '一品'],
-          'plate': ['皿', 'プレート'],
-          'ingredient': ['材料', '食材'],
-          'vegetable': ['野菜', 'サラダ', 'ヘルシー'],
-          
-          // 調理方法
-          'baked': ['焼いた', 'ベーキング', 'オーブン'],
-          'fried': ['揚げた', 'フライ', '油'],
-          
-          // 色・質感（限定的に使用）
-          'brown': ['茶色', 'チョコレート', 'コーヒー'],
-          'dark': ['暗い', 'チョコレート', 'ビター']
-        }
-        
-        // 色だけのキーワードは除外（コンテキストが不明確なため）
-        const colorOnlyKeywords = ['white', 'black', 'red', 'green', 'blue', 'yellow']
-        const filteredItems = detectedItems.filter(item => 
-          !colorOnlyKeywords.includes(item.toLowerCase())
+        // 汎用キーワードを除外（精度向上のため）
+        const genericKeywords = ['food', 'dish', 'ingredient', 'recipe', 'cooking', 'tableware', '料理', '食べ物', 'メニュー', 'white', 'black', 'red', 'green', 'blue', 'yellow', 'brown', 'dark']
+        const searchKeywords = detectedItems.filter(item => 
+          !genericKeywords.includes(item.toLowerCase())
         )
         
-        // 拡張キーワードを生成（フィルタリング済みアイテムから）
-        const expandedKeywords: string[] = []
+        console.log('🔍 検索に使用するキーワード:', searchKeywords.join(', '))
         
-        // フィルタリングされたアイテムがない場合の処理を改善
-        if (filteredItems.length === 0) {
-          console.log('🎨 色のみ検出のため、一般的な料理で検索します')
-          expandedKeywords.push('料理', '食べ物', 'メニュー', 'food', 'dish')
+        // シンプルな直接マッチング検索
+        if (searchKeywords.length === 0) {
+          console.log('🚫 有効なキーワードなし - 検索をスキップ')
+          data = []
         } else {
-          filteredItems.forEach(item => {
-            expandedKeywords.push(item.toLowerCase())
-            const mappedKeywords = keywordMappings[item.toLowerCase()]
-            if (mappedKeywords) {
-              expandedKeywords.push(...mappedKeywords)
-            }
-          })
-        }
-        
-        console.log(`🔍 フィルタリング後: ${filteredItems.join(', ')}`)
-        console.log(`🔍 拡張キーワード: ${expandedKeywords.join(', ')}`)
-        
-        // 段階的検索アプローチ
-        let searchResults: any[] = []
-        
-        // Step 1: 完全一致検索（最も信頼度が高い）
-        console.log('🎯 Step 1: 完全一致検索')
-        for (const keyword of expandedKeywords.slice(0, 3)) { // 上位3キーワードのみ
-          const exactResult = await supabaseAdmin
+          console.log('🎯 データベースキーワードとの直接マッチング検索')
+          
+          const { data: searchData, error: searchError } = await supabaseAdmin
             .from('dishes')
             .select('*')
             .eq('available', true)
-            .or(`keywords.cs.["${keyword}"],name.ilike.%${keyword}%`)
-            .limit(3)
           
-          if (exactResult.data && exactResult.data.length > 0) {
-            searchResults.push(...exactResult.data.map((dish: any) => ({
-              ...dish,
-              searchType: 'exact',
-              matchedKeyword: keyword
-            })))
-            console.log(`✅ "${keyword}" で ${exactResult.data.length}件発見`)
-          }
-        }
-        
-        // Step 2: 部分一致検索（完全一致で十分な結果がない場合のみ）
-        if (searchResults.length < 2) {
-          console.log('🔍 Step 2: 部分一致検索')
-          const partialResult = await supabaseAdmin
-            .from('dishes')
-            .select('*')
-            .eq('available', true)
-            .or(expandedKeywords.slice(0, 5).map(keyword => 
-              `description.ilike.%${keyword}%,chef_comment.ilike.%${keyword}%`
-            ).join(','))
-            .limit(3)
-          
-          if (partialResult.data && partialResult.data.length > 0) {
-            searchResults.push(...partialResult.data.map((dish: any) => ({
-              ...dish,
-              searchType: 'partial'
-            })))
-            console.log(`📊 部分一致で ${partialResult.data.length}件追加`)
-          }
-        }
-        
-        data = searchResults
-        console.log(`📊 総検索結果: ${data?.length || 0}件`)
-        
-        // 精密検索で結果が少ない場合は、スマートカテゴリ検索（ただし1件以上あれば追加検索は控えめに）
-        if (!data || data.length === 0) {
-          console.log('🔍 スマートカテゴリ検索にフォールバック')
-          
-          // 検出されたキーワードに基づいてカテゴリを推定
-          const categoryMapping: { [key: string]: string[] } = {
-            'sandwich': ['軽食', 'フード'],
-            'bread': ['軽食', 'フード'],
-            'cake': ['デザート'],
-            'dessert': ['デザート'],
-            'coffee': ['ドリンク'],
-            'salad': ['サラダ'],
-            'pasta': ['フード']
-          }
-          
-          let targetCategories: string[] = []
-          filteredItems.forEach(item => {
-            const categories = categoryMapping[item.toLowerCase()]
-            if (categories) {
-              targetCategories.push(...categories)
-            }
-          })
-          
-          // 重複除去
-          targetCategories = [...new Set(targetCategories)]
-          
-          if (targetCategories.length > 0) {
-            console.log(`🎯 推定カテゴリ: ${targetCategories.join(', ')}`)
-            
-            for (const category of targetCategories) {
-              const categoryResult = await supabaseAdmin
-                .from('dishes')
-                .select('*')
-                .eq('available', true)
-                .eq('category', category)
-                .limit(3)
+          if (searchError) {
+            console.error('❌ データベース検索エラー:', searchError)
+            data = []
+          } else {
+            // 各料理のキーワードと検出キーワードを直接比較
+            const matchedDishes = searchData?.filter((dish: any) => {
+              const dishKeywords = dish.keywords || []
+              const dishName = dish.name.toLowerCase()
+              const dishDescription = dish.description.toLowerCase()
               
-              if (categoryResult.data && categoryResult.data.length > 0) {
-                data = [...(data || []), ...categoryResult.data]
-                console.log(`📊 ${category}カテゴリ検索結果: ${categoryResult.data.length}件追加`)
-                break // 最初にマッチしたカテゴリで十分
+              // 検出キーワードがDBキーワード、料理名、説明に含まれるかチェック
+              const hasMatch = searchKeywords.some((keyword: string) => {
+                const keywordLower = keyword.toLowerCase()
+                return dishKeywords.some((dk: string) => dk.toLowerCase().includes(keywordLower)) ||
+                       dishName.includes(keywordLower) ||
+                       dishDescription.includes(keywordLower)
+              })
+              
+              if (hasMatch) {
+                console.log(`✅ マッチ: ${dish.name} - キーワード: ${dishKeywords.join(', ')}`)
               }
-            }
-          }
-          
-          // まだ結果が少ない場合は、幅広いキーワード検索
-          if (!data || data.length < 2) {
-            const broadResult = await supabaseAdmin
-              .from('dishes')
-              .select('*')
-              .eq('available', true)
-              .or(`keywords.cs.["軽食"],keywords.cs.["サンドイッチ"],keywords.cs.["パン"],keywords.cs.["ケーキ"],keywords.cs.["デザート"]`)
-              .limit(5)
+              
+              return hasMatch
+            }) || []
             
-            if (broadResult.data && broadResult.data.length > 0) {
-              data = [...(data || []), ...broadResult.data]
-              console.log(`📊 幅広い検索結果: ${broadResult.data.length}件追加`)
-            }
+            data = matchedDishes
+            console.log(`📊 マッチした料理: ${data.length}件`)
           }
+        }
+        
+        // フォールバックを完全に無効化（精度重視）
+        if (!data || data.length === 0) {
+          console.log('🚫 精密検索で結果なし - フォールバック検索をスキップ')
+          data = []
         }
         
         // 検索結果の信頼度評価
         if (data && data.length > 0) {
           console.log('🔍 検索結果の詳細分析開始')
-          console.log('🔍 検出キーワード:', expandedKeywords)
+          console.log('🔍 検出キーワード:', detectedItems)
           console.log('🔍 検索結果数:', data.length)
           
           // 各料理に信頼度スコアを追加
@@ -432,7 +319,7 @@ export async function POST(request: NextRequest) {
             // 汎用キーワードを除外してマッチング度を計算
             const genericKeywords = ['food', 'dish', 'ingredient', 'recipe', 'cooking', 'tableware', '料理', '食べ物', 'メニュー']
             
-            expandedKeywords.forEach(keyword => {
+            detectedItems.forEach(keyword => {
               // 汎用キーワードは除外
               if (genericKeywords.includes(keyword.toLowerCase())) {
                 console.log(`   ⚠️ 汎用キーワードのため除外: "${keyword}"`)
@@ -448,39 +335,29 @@ export async function POST(request: NextRequest) {
               }
             })
             
-            console.log(`   📊 最終マッチスコア: ${matchScore}/${expandedKeywords.length}`)
+            console.log(`   📊 最終マッチスコア: ${matchScore}/${detectedItems.length}`)
             
             return {
               ...dish,
               matchScore,
-              confidence: Math.min(confidence * (matchScore / Math.max(expandedKeywords.length, 1)), 1)
+              confidence: Math.min(confidence * (matchScore / Math.max(detectedItems.length, 1)), 1)
             }
           })
           
           // 信頼度でソート
           data.sort((a: any, b: any) => b.matchScore - a.matchScore)
           
-          console.log('\n📊 最終スコア一覧:', data.map((d: any) => `${d.name}: ${d.matchScore}/${expandedKeywords.length}`))
+          console.log('\n📊 最終スコア一覧:', data.map((d: any) => `${d.name}: ${d.matchScore}/${detectedItems.length}`))
         }
         
-        // 厳格な信頼度フィルタリング
-        const minMatchScore = 1 // 最低1つのキーワードマッチが必要
+        // 最低マッチスコア基準（シンプル）
+        const minMatchScore = 1
         if (data && data.length > 0) {
-          console.log('\n🔍 フィルタリング前の全料理:')
-          data.forEach((dish: any, i: number) => {
-            console.log(`  ${i + 1}. ${dish.name} - スコア: ${dish.matchScore} (${dish.matchScore >= minMatchScore ? '✅通過' : '❌除外'})`)
-          })
+          const filteredResults = data.filter((dish: any) => dish.matchScore >= minMatchScore)
           
-          const strictResults = data.filter((dish: any) => 
-            dish.matchScore >= minMatchScore
-          )
-          
-          console.log(`\n🔍 フィルタリング結果: ${data.length}件 → ${strictResults.length}件`)
-          
-          if (strictResults.length > 0) {
-            data = strictResults
-            console.log(`✅ 厳格フィルタリング後: ${data.length}件 (マッチスコア≥${minMatchScore})`)
-            console.log('✅ 通過した料理:', data.map(d => `${d.name}(${d.matchScore})`).join(', '))
+          if (filteredResults.length > 0) {
+            data = filteredResults
+            console.log(`✅ フィルタリング後: ${data.length}件 (マッチスコア≥${minMatchScore})`)
           } else {
             console.log('⚠️ マッチスコアが低すぎるため結果をクリア')
             data = []

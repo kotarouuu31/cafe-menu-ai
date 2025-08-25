@@ -60,16 +60,11 @@ export async function POST(request: NextRequest) {
       console.warn('⚠️ Supabase環境変数が設定されていません。モックデータを使用します。')
     }
 
-    const formData = await request.formData()
-    const imageFile = formData.get('image') as File
+    const { imageData } = await request.json()
 
-    if (!imageFile) {
-      return NextResponse.json({ error: 'Image file is required' }, { status: 400 })
+    if (!imageData) {
+      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
     }
-
-    // ファイルをBase64に変換
-    const arrayBuffer = await imageFile.arrayBuffer()
-    const imageData = Buffer.from(arrayBuffer).toString('base64')
 
     let detectedItems: string[] = []
     let confidence = 0.7

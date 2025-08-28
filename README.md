@@ -185,7 +185,7 @@ src/
 ## デプロイ
 
 ### 本番環境
-- **URL**: https://cafe-menu-ai.vercel.app
+- **URL**: [cafe-menu-our4enlvj-kotarous-projects.vercel.app](https://cafe-menu-our4enlvj-kotarous-projects.vercel.app/)
 - **インフラ**: Vercel (自動デプロイ)
 - **データベース**: Supabase (PostgreSQL)
 - **CMS**: Notion

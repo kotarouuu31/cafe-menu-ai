@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings, Menu, Plus, BarChart3 } from 'lucide-react'
+import { Settings, Menu, Plus, BarChart3, Camera, Search } from 'lucide-react'
 
 export default function AdminPage() {
   return (
@@ -18,7 +18,7 @@ export default function AdminPage() {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Link
-            href="/admin/menus"
+            href="/admin/dishes"
             className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow group"
           >
             <div className="flex items-center mb-4">
@@ -26,16 +26,16 @@ export default function AdminPage() {
                 <Menu className="w-6 h-6 text-blue-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 ml-3">
-                メニュー管理
+                料理管理
               </h3>
             </div>
             <p className="text-gray-600 text-sm">
-              登録済みメニューの一覧表示、編集、削除
+              Vision API対応の料理データ管理・編集・削除
             </p>
           </Link>
 
           <Link
-            href="/admin/menus/new"
+            href="/admin/new-dish"
             className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow group"
           >
             <div className="flex items-center mb-4">
@@ -43,28 +43,47 @@ export default function AdminPage() {
                 <Plus className="w-6 h-6 text-green-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 ml-3">
-                新規メニュー登録
+                新しい料理を追加
               </h3>
             </div>
             <p className="text-gray-600 text-sm">
-              新しいメニューアイテムを追加
+              Vision APIで自動キーワード生成して料理を追加
             </p>
           </Link>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <Link
+            href="/"
+            className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow group"
+          >
             <div className="flex items-center mb-4">
-              <div className="bg-purple-100 rounded-lg p-3">
-                <BarChart3 className="w-6 h-6 text-purple-600" />
+              <div className="bg-purple-100 rounded-lg p-3 group-hover:bg-purple-200 transition-colors">
+                <Camera className="w-6 h-6 text-purple-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 ml-3">
-                解析統計
+                AI画像解析テスト
               </h3>
             </div>
             <p className="text-gray-600 text-sm">
-              AI画像解析の利用状況と精度統計
+              メニュー撮影でAI画像解析をテスト
             </p>
-            <p className="text-xs text-gray-500 mt-2">近日公開予定</p>
-          </div>
+          </Link>
+
+          <Link
+            href="/admin/keywords"
+            className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow group"
+          >
+            <div className="flex items-center mb-4">
+              <div className="bg-orange-100 rounded-lg p-3 group-hover:bg-orange-200 transition-colors">
+                <Search className="w-6 h-6 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 ml-3">
+                キーワード管理
+              </h3>
+            </div>
+            <p className="text-gray-600 text-sm">
+              料理のキーワードを一括管理・最適化
+            </p>
+          </Link>
         </div>
 
         {/* Recent Activity */}

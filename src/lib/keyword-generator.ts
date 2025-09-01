@@ -33,11 +33,11 @@ export class AutoKeywordGenerator {
       const [textResult] = await this.visionClient.textDetection({ image: { content: imageBuffer } })
 
       // 検出結果を統合
-      const detectedLabels = labelResult.labelAnnotations
+      const detectedLabels = labelResult?.labelAnnotations
         ?.filter(label => (label.score || 0) >= 0.6)
         .map(label => label.description || '') || []
 
-      const detectedObjects = objectResult.localizedObjectAnnotations
+      const detectedObjects = objectResult?.localizedObjectAnnotations
         ?.filter(obj => (obj.score || 0) >= 0.5)
         .map(obj => obj.name || '') || []
 
@@ -45,7 +45,7 @@ export class AutoKeywordGenerator {
       const keywords = this.generateSemanticKeywords(dishName, category, detectedLabels, detectedObjects)
 
       // 信頼度計算
-      const avgConfidence = this.calculateConfidence(labelResult.labelAnnotations || [])
+      const avgConfidence = this.calculateConfidence(labelResult?.labelAnnotations || [])
 
       return {
         keywords,
@@ -58,31 +58,23 @@ export class AutoKeywordGenerator {
   }
 
   /**
-   * 意味的キーワード生成（日本語・英語両対応）
+   * 意味的キーワード生成（英語のみ）
    */
   private generateSemanticKeywords(dishName: string, category: string, labels: string[], objects: string[]): string[] {
     const keywords = new Set<string>()
 
-    // 基本情報
-    keywords.add(dishName)
-    keywords.add(category)
-
-    // カテゴリベースキーワード
+    // カテゴリベース英語キーワード
     const categoryKeywords = this.getCategoryKeywords(category)
     categoryKeywords.forEach(k => keywords.add(k))
 
-    // Vision API検出結果から生成
+    // Vision API検出結果から生成（英語のみ）
     const detectedKeywords = [...labels, ...objects]
     detectedKeywords.forEach(detected => {
       // 英語キーワード追加
       keywords.add(detected.toLowerCase())
-      
-      // 日本語マッピング
-      const japaneseKeywords = this.getJapaneseMapping(detected.toLowerCase())
-      japaneseKeywords.forEach(k => keywords.add(k))
     })
 
-    // 料理名から推測されるキーワード
+    // 料理名から推測される英語キーワード
     const nameBasedKeywords = this.getNameBasedKeywords(dishName)
     nameBasedKeywords.forEach(k => keywords.add(k))
 
@@ -91,17 +83,17 @@ export class AutoKeywordGenerator {
 
 
   /**
-   * カテゴリ別キーワード辞書
+   * カテゴリ別キーワード辞書（英語のみ）
    */
   private getCategoryKeywords(category: string): string[] {
     const categoryMap: { [key: string]: string[] } = {
-      'デザート': ['dessert', 'sweet', '甘い', 'スイーツ', '甘味'],
-      '軽食': ['light meal', 'snack', '軽食', 'ランチ', 'つまみ'],
-      'ドリンク': ['drink', 'beverage', '飲み物', '飲料', 'ドリンク'],
-      'フード': ['food', 'dish', '料理', '食べ物', 'メイン'],
-      'サラダ': ['salad', 'vegetables', '野菜', 'ヘルシー', 'フレッシュ']
+      'デザート': ['dessert', 'sweet'],
+      '軽食': ['light meal', 'snack'],
+      'ドリンク': ['drink', 'beverage'],
+      'フード': ['main dish', 'entree'],
+      'サラダ': ['salad', 'vegetables']
     }
-    return categoryMap[category] || ['food', '料理']
+    return categoryMap[category] || ['dish']
   }
 
   /**
@@ -130,21 +122,25 @@ export class AutoKeywordGenerator {
   }
 
   /**
-   * 料理名ベースキーワード生成
+   * 料理名ベースキーワード生成（英語のみ）
    */
   private getNameBasedKeywords(dishName: string): string[] {
     const keywords: string[] = []
     
     // 料理名に含まれる要素を分析
     const namePatterns = [
-      { pattern: /ケーキ/, keywords: ['cake', 'dessert', 'sweet', 'デザート'] },
-      { pattern: /サンドイッチ/, keywords: ['sandwich', 'bread', 'light meal', '軽食'] },
-      { pattern: /コーヒー/, keywords: ['coffee', 'drink', 'caffeine', 'ドリンク'] },
-      { pattern: /サラダ/, keywords: ['salad', 'vegetables', 'healthy', 'ヘルシー'] },
-      { pattern: /パスタ/, keywords: ['pasta', 'italian', 'noodles', '麺類'] },
-      { pattern: /ピザ/, keywords: ['pizza', 'italian', 'cheese', 'イタリアン'] },
-      { pattern: /ハンバーガー/, keywords: ['burger', 'fast food', 'meat', 'ファストフード'] },
-      { pattern: /スープ/, keywords: ['soup', 'liquid', 'warm', '汁物'] }
+      { pattern: /ティラミス/, keywords: ['tiramisu', 'mascarpone', 'coffee', 'ladyfinger', 'cocoa', 'italian dessert'] },
+      { pattern: /アボカド/, keywords: ['avocado', 'toast', 'healthy', 'green', 'nutritious'] },
+      { pattern: /ガーリック/, keywords: ['garlic', 'shrimp', 'butter', 'seafood', 'aromatic'] },
+      { pattern: /シュリンプ/, keywords: ['shrimp', 'seafood', 'garlic', 'butter', 'prawns'] },
+      { pattern: /ケーキ/, keywords: ['cake', 'dessert', 'sweet', 'pastry'] },
+      { pattern: /サンドイッチ/, keywords: ['sandwich', 'bread', 'light meal', 'lunch'] },
+      { pattern: /コーヒー/, keywords: ['coffee', 'drink', 'caffeine', 'beverage'] },
+      { pattern: /サラダ/, keywords: ['salad', 'vegetables', 'healthy', 'fresh'] },
+      { pattern: /パスタ/, keywords: ['pasta', 'italian', 'noodles', 'carbohydrate'] },
+      { pattern: /ピザ/, keywords: ['pizza', 'italian', 'cheese', 'baked'] },
+      { pattern: /ハンバーガー/, keywords: ['burger', 'fast food', 'meat', 'sandwich'] },
+      { pattern: /スープ/, keywords: ['soup', 'liquid', 'warm', 'broth'] }
     ]
 
     namePatterns.forEach(({ pattern, keywords: patternKeywords }) => {
@@ -167,11 +163,21 @@ export class AutoKeywordGenerator {
   }
 
   /**
-   * フォールバックキーワード
+   * フォールバックキーワード（英語のみ）
    */
   private getFallbackKeywords(dishName: string, category: string): KeywordGenerationResult {
+    // カテゴリベース英語キーワード
+    const categoryKeywords = this.getCategoryKeywords(category)
+    
+    // 料理名ベース英語キーワード
+    const nameBasedKeywords = this.getNameBasedKeywords(dishName)
+    
+    const keywords = new Set<string>()
+    categoryKeywords.forEach(k => keywords.add(k))
+    nameBasedKeywords.forEach(k => keywords.add(k))
+    
     return {
-      keywords: [dishName, category, '料理', 'food'],
+      keywords: Array.from(keywords).filter(k => k.length > 0),
       confidence: 0.5
     }
   }

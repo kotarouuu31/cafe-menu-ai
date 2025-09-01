@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Camera, Upload, Loader2, AlertCircle, RefreshCw, RotateCcw, Sparkles } from 'lucide-react'
 import { ImageAnalysisResult, Dish } from '@/types/menu'
-import { formatPrice } from '@/lib/menu-utils'
+import { formatPrice } from '@/lib/utils'
 import PWAInstall from '@/components/PWAInstall'
 
 // 安全な配列変換関数

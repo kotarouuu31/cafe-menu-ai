@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Loader2, Wand2, Upload, RefreshCw } from 'lucide-react'
 
 interface KeywordResult {
@@ -64,16 +64,49 @@ const toast = {
   error: (message: string) => alert(`❌ ${message}`)
 }
 
+interface Dish {
+  id: string
+  name: string
+  category: string
+  keywords: string[]
+}
+
 export function KeywordManager() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isBulkUpdating, setIsBulkUpdating] = useState(false)
   const [previewResult, setPreviewResult] = useState<KeywordResult | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [dishes, setDishes] = useState<Dish[]>([])
+  const [selectedDish, setSelectedDish] = useState<Dish | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // 料理データ取得
+  const fetchDishes = async () => {
+    try {
+      const response = await fetch('/api/dishes')
+      const data = await response.json()
+      if (data.success) {
+        setDishes(data.dishes)
+      }
+    } catch (error) {
+      toast.error('料理データの取得に失敗しました')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 初期化
+  useEffect(() => {
+    fetchDishes()
+  }, [])
 
   // 単一画像からキーワード生成
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file) return
+    if (!file || !selectedDish) {
+      toast.error('料理を選択してください')
+      return
+    }
 
     setIsGenerating(true)
     try {
@@ -86,9 +119,10 @@ export function KeywordManager() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            dishId: selectedDish.id,
             imageData,
-            dishName: 'テスト料理',
-            category: 'フード'
+            dishName: selectedDish.name,
+            category: selectedDish.category
           })
         })
 
@@ -96,10 +130,12 @@ export function KeywordManager() {
         if (result.success) {
           setPreviewResult({
             keywords: result.keywords,
-            visual_keywords: result.visual_keywords,
+            visual_keywords: result.visual_keywords || [],
             confidence: result.confidence
           })
-          toast.success('キーワードを生成しました！')
+          toast.success(`${selectedDish.name}のキーワードを生成・更新しました！`)
+          // 料理リストを再取得
+          fetchDishes()
         } else {
           toast.error('キーワード生成に失敗しました')
         }
@@ -147,6 +183,59 @@ export function KeywordManager() {
         </p>
       </div>
 
+      {/* 料理選択 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>📋 料理選択</CardTitle>
+          <CardDescription>
+            キーワードを更新する料理を選択してください
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              料理データを読み込み中...
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <select
+                value={selectedDish?.id || ''}
+                onChange={(e) => {
+                  const dish = dishes.find(d => d.id === e.target.value)
+                  setSelectedDish(dish || null)
+                  setPreviewResult(null)
+                  setSelectedImage(null)
+                }}
+                className="w-full p-2 border rounded-md"
+              >
+                <option value="">料理を選択...</option>
+                {dishes.map((dish) => (
+                  <option key={dish.id} value={dish.id}>
+                    {dish.name} ({dish.category})
+                  </option>
+                ))}
+              </select>
+              
+              {selectedDish && (
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-800">{selectedDish.name}</h4>
+                  <p className="text-sm text-blue-600">カテゴリ: {selectedDish.category}</p>
+                  <div className="mt-2">
+                    <p className="text-xs text-blue-600 mb-1">現在のキーワード:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedDish.keywords.map((keyword, index) => (
+                        <Badge key={index} variant="secondary">{keyword}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* 画像アップロードテスト */}
       <Card>
         <CardHeader>
@@ -165,9 +254,12 @@ export function KeywordManager() {
               accept="image/*"
               onChange={handleImageUpload}
               className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-              disabled={isGenerating}
+              disabled={isGenerating || !selectedDish}
             />
             {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
+            {!selectedDish && (
+              <p className="text-sm text-gray-500">まず料理を選択してください</p>
+            )}
           </div>
 
           {selectedImage && (
@@ -186,7 +278,7 @@ export function KeywordManager() {
                 <div>
                   <h4 className="font-semibold mb-2">生成されたキーワード:</h4>
                   <div className="flex flex-wrap gap-1">
-                    {previewResult.keywords.map((keyword, index) => (
+                    {(previewResult.keywords || []).map((keyword, index) => (
                       <Badge key={index} variant="default">{keyword}</Badge>
                     ))}
                   </div>
@@ -195,7 +287,7 @@ export function KeywordManager() {
                 <div>
                   <h4 className="font-semibold mb-2">視覚的キーワード:</h4>
                   <div className="flex flex-wrap gap-1">
-                    {previewResult.visual_keywords.map((keyword, index) => (
+                    {(previewResult.visual_keywords || []).map((keyword, index) => (
                       <Badge key={index} variant="secondary">{keyword}</Badge>
                     ))}
                   </div>

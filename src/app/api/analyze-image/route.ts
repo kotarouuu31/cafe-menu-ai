@@ -9,6 +9,11 @@ function mockImageAnalysis(imageData: string): { detectedItems: string[]; confid
   const hashSum = imageHash.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
   
   const analysisPatterns = [
+    // アボカドトースト系
+    {
+      keywords: ['avocado', 'toast', 'green', 'healthy'],
+      confidence: 0.85
+    },
     // コーヒー系
     {
       keywords: ['coffee', 'drink', 'beverage'],
@@ -254,7 +259,7 @@ export async function POST(request: NextRequest) {
         const mockResult = mockImageAnalysis(imageData)
         detectedItems = mockResult.detectedItems
         confidence = mockResult.confidence
-        console.log('🔄 モックデータにフォールバック:', detectedItems)
+        console.log('🔄 Vision APIエラー - モックデータにフォールバック:', detectedItems)
       }
     } else {
       console.log('⚠️ Vision API環境変数が未設定:', {
@@ -283,19 +288,20 @@ export async function POST(request: NextRequest) {
       if (detectedItems.length > 0) {
         console.log(`🔍 検索キーワード: ${detectedItems.join(', ')}`)
         
-        // 汎用キーワードを除外（精度向上のため）- 大幅強化
+        // 汎用キーワードを除外（精度向上のため）- 重要キーワードを保持
         const genericKeywords = [
-          // 基本的な食べ物関連
+          // 基本的な食べ物関連（ただしavocado, toast, green, guacamoleは除外しない）
           'food', 'dish', 'meal', 'cuisine', 'ingredient', 'recipe', 'cooking', 'tableware', 'plate', 'bowl',
-          // 色関連（曖昧すぎる）
-          'white', 'black', 'red', 'green', 'blue', 'yellow', 'brown', 'dark', 'light', 'colorful',
-          // 形状・質感（曖昧すぎる）
+          'finger food', 'staple food', 'produce', 'condiment', 'bread',
+          // 色関連（ただしgreenは除外しない）
+          'white', 'black', 'red', 'blue', 'yellow', 'brown', 'dark', 'light', 'colorful',
+          // 形状・質感関連
           'round', 'square', 'smooth', 'rough', 'soft', 'hard', 'hot', 'cold',
-          // 一般的すぎる単語
+          // 場所・状況関連
           'table', 'restaurant', 'kitchen', 'eating', 'delicious', 'tasty', 'fresh',
-          // 日本語の汎用キーワード
+          // 日本語汎用キーワード
           '料理', '食べ物', 'メニュー', '美味しい', '新鮮', '温かい', '冷たい', '白い', '黒い', '赤い', '緑',
-          // Vision APIでよく検出される無関係な単語
+          // その他汎用的すぎるもの
           'night', 'day', 'indoor', 'outdoor', 'person', 'hand', 'finger', 'wood', 'metal', 'glass'
         ]
         
@@ -310,7 +316,7 @@ export async function POST(request: NextRequest) {
         
         console.log('🔍 検索に使用するキーワード:', searchKeywords.join(', '))
         
-        // シンプルな直接マッチング検索
+        // 検索キーワードが空の場合の処理
         if (searchKeywords.length === 0) {
           console.log('🚫 有効なキーワードなし - 検索をスキップ')
           data = []
@@ -374,10 +380,11 @@ export async function POST(request: NextRequest) {
             console.log(`   DBキーワード:`, dish.keywords)
             console.log(`   全検索対象:`, dishKeywords)
             
-            // 汎用キーワードを除外してマッチング度を計算（重み付け対応）
+            // 汎用キーワードを除外してマッチング度を計算（重み付け対応）- アボカド系キーワードを保持
             const genericKeywords = [
               'food', 'dish', 'meal', 'cuisine', 'ingredient', 'recipe', 'cooking', 'tableware', 'plate', 'bowl',
-              'white', 'black', 'red', 'green', 'blue', 'yellow', 'brown', 'dark', 'light', 'colorful',
+              'finger food', 'staple food', 'produce', 'condiment', 'bread',
+              'white', 'black', 'red', 'blue', 'yellow', 'brown', 'dark', 'light', 'colorful',
               'round', 'square', 'smooth', 'rough', 'soft', 'hard', 'hot', 'cold',
               'table', 'restaurant', 'kitchen', 'eating', 'delicious', 'tasty', 'fresh',
               '料理', '食べ物', 'メニュー', '美味しい', '新鮮', '温かい', '冷たい', '白い', '黒い', '赤い', '緑',
@@ -439,8 +446,8 @@ export async function POST(request: NextRequest) {
           console.log('\n📊 最終スコア一覧:', data.map((d: any) => `${d.name}: ${d.matchScore}/${detectedItems.length}`))
         }
         
-        // 最低マッチスコア基準（シンプル）
-        const minMatchScore = 1
+        // 最低マッチスコア基準（より柔軟に）
+        const minMatchScore = 0.1
         if (data && data.length > 0) {
           const filteredResults = data.filter((dish: any) => dish.matchScore >= minMatchScore)
           

@@ -73,7 +73,7 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
               )
               
               keywords = generatedKeywords.keywords
-              visual_keywords = generatedKeywords.visual_keywords
+              visual_keywords = []
               
               console.log(`✅ ${dishData.name} キーワード生成完了:`, {
                 keywords: keywords.slice(0, 5),
@@ -83,9 +83,15 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
             }
           } catch (keywordError) {
             console.warn(`⚠️ ${dishData.name} キーワード生成失敗:`, keywordError)
-            // フォールバック: 料理名とカテゴリベースのキーワード
-            keywords = [dishData.name, dishData.category, '料理', 'food']
-            visual_keywords = ['美味しそう', '食べ物']
+            // フォールバック: 英語ベースのキーワード生成
+            const fallbackGenerator = new AutoKeywordGenerator()
+            const fallbackResult = await fallbackGenerator.generateKeywords(
+              Buffer.alloc(0), // 空のBuffer（フォールバック用）
+              dishData.name,
+              dishData.category
+            )
+            keywords = fallbackResult.keywords
+            visual_keywords = []
           }
         }
 

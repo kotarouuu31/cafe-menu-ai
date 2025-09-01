@@ -1,70 +1,86 @@
-// 基本メニュー型（統一）
-export interface Menu {
+// 基本料理型（統一）
+export interface Dish {
   id: string
   name: string
   description: string
   ingredients: string[]
   allergens: string[]
   keywords: string[]
+  visual_keywords?: string[]
   imageUrls: string[]
   price?: number | null
   category: string
   active: boolean
   createdAt: Date
   updatedAt: Date
+  // Notion拡張フィールド
+  name_en?: string
+  chef_comment?: string
+  recommendation?: string
+  pairing_suggestion?: string
+  nutritional_info?: NutritionalInfo
+  seasonal?: boolean
+  popular?: boolean
+  notion_id?: string
+}
+
+// 栄養情報型
+export interface NutritionalInfo {
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
 }
 
 // データベース用（JSON文字列フィールド）
-export interface MenuDB {
+export interface DishDB {
   id: string
   name: string
   description: string
   ingredients: string // JSON string
   allergens: string   // JSON string
   keywords: string    // JSON string
+  visual_keywords?: string // JSON string
   imageUrls: string   // JSON string
   price?: number | null
   category: string
   active: boolean
   createdAt: Date
   updatedAt: Date
+  name_en?: string
+  chef_comment?: string
+  recommendation?: string
+  pairing_suggestion?: string
+  nutritional_info?: string // JSON string
+  seasonal?: boolean
+  popular?: boolean
+  notion_id?: string
 }
 
 // フォーム入力型
-export interface CreateMenuInput {
+export interface CreateDishInput {
   name: string
   description: string
   ingredients: string[]
   allergens: string[]
   keywords: string[]
+  visual_keywords?: string[]
   imageUrls: string[]
   price?: number | null
   category: string
 }
 
 // 更新用型
-export interface UpdateMenuInput extends Partial<CreateMenuInput> {
+export interface UpdateDishInput extends Partial<CreateDishInput> {
   id: string
   active?: boolean
 }
 
-// Notion用拡張型
-export interface Dish extends Menu {
-  name_en?: string
-  chef_comment?: string
-  recommendation?: string
-  pairing_suggestion?: string
-  nutritional_info?: {
-    calories?: number
-    protein?: number
-    carbs?: number
-    fat?: number
-  }
-  visual_keywords?: string[]
-  seasonal?: boolean
-  popular?: boolean
-  notion_id?: string
-}
+// 後方互換性のためのエイリアス
+export type Menu = Dish
+export type MenuDB = DishDB
+export type CreateMenuInput = CreateDishInput
+export type UpdateMenuInput = UpdateDishInput
 
 // 原材料型
 export interface Ingredient {

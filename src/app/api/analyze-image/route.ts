@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
     let detectedItems: string[] = []
     let confidence = 0.7
     let usingVisionAPI = false
+    let weightedItems: Array<{item: string, source: string, confidence: number, weight: number, weightedScore: number}> = []
 
     // Google Vision API設定チェック
     const hasVisionAPI = process.env.GOOGLE_CLOUD_PROJECT_ID && 
@@ -138,34 +139,70 @@ export async function POST(request: NextRequest) {
         console.log('  - Objects:', objectResult.localizedObjectAnnotations?.map((o: any) => `${o.name} (${o.score?.toFixed(2)})`))
         console.log('  - Text:', textResult.textAnnotations?.[0]?.description?.substring(0, 100))
         
-        // 検出されたアイテムを統合
-        const allDetectedItems: string[] = []
+        // 検出されたアイテムを統合（重み付けスコアリング対応）
+        const detectionResults: Array<{item: string, source: string, confidence: number, weight: number}> = []
         
-        // ラベル検出結果（信頼度0.6以上）
+        // ラベル検出結果（信頼度0.6以上、重み: 1.0）
         if (labelResult.labelAnnotations) {
-          const relevantLabels = labelResult.labelAnnotations
+          labelResult.labelAnnotations
             .filter((label: any) => (label.score || 0) >= 0.6)
-            .map((label: any) => label.description)
-          allDetectedItems.push(...relevantLabels)
+            .forEach((label: any) => {
+              detectionResults.push({
+                item: label.description,
+                source: 'label',
+                confidence: label.score || 0,
+                weight: 1.0
+              })
+            })
         }
         
-        // オブジェクト検出結果（信頼度0.5以上）
+        // オブジェクト検出結果（信頼度0.5以上、重み: 1.2 - より具体的）
         if (objectResult.localizedObjectAnnotations) {
-          const relevantObjects = objectResult.localizedObjectAnnotations
+          objectResult.localizedObjectAnnotations
             .filter((obj: any) => (obj.score || 0) >= 0.5)
-            .map((obj: any) => obj.name)
-          allDetectedItems.push(...relevantObjects)
+            .forEach((obj: any) => {
+              detectionResults.push({
+                item: obj.name,
+                source: 'object',
+                confidence: obj.score || 0,
+                weight: 1.2
+              })
+            })
         }
         
-        // テキスト検出から料理名を抽出
+        // テキスト検出から料理名を抽出（重み: 1.5 - 最も具体的）
         if (textResult?.textAnnotations && textResult.textAnnotations[0]) {
           const detectedText = textResult.textAnnotations[0].description || ''
-          const foodKeywords = ['ケーキ', 'チョコ', 'パン', 'サラダ', 'コーヒー', 'cake', 'chocolate', 'bread', 'salad', 'coffee']
-          const textKeywords = foodKeywords.filter(keyword => 
-            detectedText.toLowerCase().includes(keyword.toLowerCase())
-          )
-          allDetectedItems.push(...textKeywords)
+          const foodKeywords = [
+            'ケーキ', 'チョコレート', 'パンケーキ', 'サンドイッチ', 'サラダ', 'コーヒー', 'ティラミス',
+            'cake', 'chocolate', 'pancake', 'sandwich', 'salad', 'coffee', 'tiramisu', 'pasta', 'pizza'
+          ]
+          
+          foodKeywords.forEach(keyword => {
+            if (detectedText.toLowerCase().includes(keyword.toLowerCase())) {
+              detectionResults.push({
+                item: keyword,
+                source: 'text',
+                confidence: 0.9, // テキスト検出は高信頼度
+                weight: 1.5
+              })
+            }
+          })
         }
+        
+        console.log('🔍 検出結果詳細:', detectionResults.map(r => 
+          `${r.item} (${r.source}: ${r.confidence.toFixed(2)} × ${r.weight})`
+        ))
+        
+        // 重み付けスコアで統合・ソート
+        weightedItems = detectionResults
+          .map(result => ({
+            ...result,
+            weightedScore: result.confidence * result.weight
+          }))
+          .sort((a, b) => b.weightedScore - a.weightedScore)
+        
+        const allDetectedItems = weightedItems.map(item => item.item)
         
         // 食べ物関連キーワードの優先度付け
         const foodRelatedKeywords = [
@@ -199,6 +236,7 @@ export async function POST(request: NextRequest) {
           
           console.log('🔍 統合検出結果:', detectedItems)
           console.log('🎯 最高信頼度:', confidence)
+          
         } else {
           console.warn('⚠️ Vision API: 有効なアイテムが検出されませんでした')
           throw new Error('No relevant items detected')
@@ -245,11 +283,30 @@ export async function POST(request: NextRequest) {
       if (detectedItems.length > 0) {
         console.log(`🔍 検索キーワード: ${detectedItems.join(', ')}`)
         
-        // 汎用キーワードを除外（精度向上のため）
-        const genericKeywords = ['food', 'dish', 'ingredient', 'recipe', 'cooking', 'tableware', '料理', '食べ物', 'メニュー', 'white', 'black', 'red', 'green', 'blue', 'yellow', 'brown', 'dark']
-        const searchKeywords = detectedItems.filter(item => 
-          !genericKeywords.includes(item.toLowerCase())
-        )
+        // 汎用キーワードを除外（精度向上のため）- 大幅強化
+        const genericKeywords = [
+          // 基本的な食べ物関連
+          'food', 'dish', 'meal', 'cuisine', 'ingredient', 'recipe', 'cooking', 'tableware', 'plate', 'bowl',
+          // 色関連（曖昧すぎる）
+          'white', 'black', 'red', 'green', 'blue', 'yellow', 'brown', 'dark', 'light', 'colorful',
+          // 形状・質感（曖昧すぎる）
+          'round', 'square', 'smooth', 'rough', 'soft', 'hard', 'hot', 'cold',
+          // 一般的すぎる単語
+          'table', 'restaurant', 'kitchen', 'eating', 'delicious', 'tasty', 'fresh',
+          // 日本語の汎用キーワード
+          '料理', '食べ物', 'メニュー', '美味しい', '新鮮', '温かい', '冷たい', '白い', '黒い', '赤い', '緑',
+          // Vision APIでよく検出される無関係な単語
+          'night', 'day', 'indoor', 'outdoor', 'person', 'hand', 'finger', 'wood', 'metal', 'glass'
+        ]
+        
+        const searchKeywords = detectedItems.filter(item => {
+          const itemLower = item.toLowerCase()
+          const isGeneric = genericKeywords.includes(itemLower)
+          if (isGeneric) {
+            console.log(`🚫 汎用キーワード除外: "${item}"`)
+          }
+          return !isGeneric
+        })
         
         console.log('🔍 検索に使用するキーワード:', searchKeywords.join(', '))
         
@@ -307,40 +364,72 @@ export async function POST(request: NextRequest) {
           console.log('🔍 検出キーワード:', detectedItems)
           console.log('🔍 検索結果数:', data.length)
           
-          // 各料理に信頼度スコアを追加
+          // 各料理に重み付けスコアを追加
           data = data.map((dish: any, index: number) => {
-            let matchScore = 0
+            let weightedMatchScore = 0
+            let totalWeight = 0
             const dishKeywords = [...(dish.keywords || []), dish.name.toLowerCase(), dish.description.toLowerCase()]
             
             console.log(`\n🍽️ 料理${index + 1}: ${dish.name}`)
             console.log(`   DBキーワード:`, dish.keywords)
             console.log(`   全検索対象:`, dishKeywords)
             
-            // 汎用キーワードを除外してマッチング度を計算
-            const genericKeywords = ['food', 'dish', 'ingredient', 'recipe', 'cooking', 'tableware', '料理', '食べ物', 'メニュー']
+            // 汎用キーワードを除外してマッチング度を計算（重み付け対応）
+            const genericKeywords = [
+              'food', 'dish', 'meal', 'cuisine', 'ingredient', 'recipe', 'cooking', 'tableware', 'plate', 'bowl',
+              'white', 'black', 'red', 'green', 'blue', 'yellow', 'brown', 'dark', 'light', 'colorful',
+              'round', 'square', 'smooth', 'rough', 'soft', 'hard', 'hot', 'cold',
+              'table', 'restaurant', 'kitchen', 'eating', 'delicious', 'tasty', 'fresh',
+              '料理', '食べ物', 'メニュー', '美味しい', '新鮮', '温かい', '冷たい', '白い', '黒い', '赤い', '緑',
+              'night', 'day', 'indoor', 'outdoor', 'person', 'hand', 'finger', 'wood', 'metal', 'glass'
+            ]
             
-            detectedItems.forEach(keyword => {
-              // 汎用キーワードは除外
-              if (genericKeywords.includes(keyword.toLowerCase())) {
-                console.log(`   ⚠️ 汎用キーワードのため除外: "${keyword}"`)
-                return
-              }
-              
-              const matched = dishKeywords.some(dk => dk.toLowerCase().includes(keyword.toLowerCase()))
-              if (matched) {
-                matchScore += 1
-                console.log(`   ✅ マッチ: "${keyword}"`)
-              } else {
-                console.log(`   ❌ 不一致: "${keyword}"`)
-              }
-            })
+            // weightedItemsが定義されている場合は重み付けスコアを使用
+            if (typeof weightedItems !== 'undefined' && weightedItems.length > 0) {
+              weightedItems.forEach(weightedItem => {
+                // 汎用キーワードは除外
+                if (genericKeywords.includes(weightedItem.item.toLowerCase())) {
+                  console.log(`   ⚠️ 汎用キーワードのため除外: "${weightedItem.item}"`)
+                  return
+                }
+                
+                const matched = dishKeywords.some(dk => dk.toLowerCase().includes(weightedItem.item.toLowerCase()))
+                if (matched) {
+                  const itemScore = weightedItem.weightedScore
+                  weightedMatchScore += itemScore
+                  totalWeight += weightedItem.weight
+                  console.log(`   ✅ 重み付きマッチ: "${weightedItem.item}" (スコア: ${itemScore.toFixed(2)}, 重み: ${weightedItem.weight})`)
+                } else {
+                  console.log(`   ❌ 不一致: "${weightedItem.item}"`)
+                }
+              })
+            } else {
+              // フォールバック: 従来の方式
+              detectedItems.forEach(keyword => {
+                if (genericKeywords.includes(keyword.toLowerCase())) {
+                  console.log(`   ⚠️ 汎用キーワードのため除外: "${keyword}"`)
+                  return
+                }
+                
+                const matched = dishKeywords.some(dk => dk.toLowerCase().includes(keyword.toLowerCase()))
+                if (matched) {
+                  weightedMatchScore += 1
+                  totalWeight += 1
+                  console.log(`   ✅ マッチ: "${keyword}"`)
+                } else {
+                  console.log(`   ❌ 不一致: "${keyword}"`)
+                }
+              })
+            }
             
-            console.log(`   📊 最終マッチスコア: ${matchScore}/${detectedItems.length}`)
+            const normalizedScore = totalWeight > 0 ? weightedMatchScore / totalWeight : 0
+            console.log(`   📊 重み付きマッチスコア: ${weightedMatchScore.toFixed(2)} / 総重み: ${totalWeight.toFixed(2)} = ${normalizedScore.toFixed(2)}`)
             
             return {
               ...dish,
-              matchScore,
-              confidence: Math.min(confidence * (matchScore / Math.max(detectedItems.length, 1)), 1)
+              matchScore: Math.round(weightedMatchScore * 10) / 10, // 小数点1桁で丸める
+              weightedScore: normalizedScore,
+              confidence: Math.min(confidence * normalizedScore, 1)
             }
           })
           

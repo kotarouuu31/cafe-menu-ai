@@ -2,60 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ImageAnalysisResult } from '@/types/menu'
 
-// 改善されたモック画像解析：画像データに基づく一貫性のある結果
-function mockImageAnalysis(imageData: string): { detectedItems: string[]; confidence: number } {
-  // 画像データのハッシュ値を使用して一貫性のある結果を生成
-  const imageHash = imageData.slice(-10) // 最後の10文字を使用
-  const hashSum = imageHash.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  
-  const analysisPatterns = [
-    // アボカドトースト系
-    {
-      keywords: ['avocado', 'toast', 'green', 'healthy'],
-      confidence: 0.85
-    },
-    // コーヒー系
-    {
-      keywords: ['coffee', 'drink', 'beverage'],
-      confidence: 0.85
-    },
-    // ケーキ系
-    {
-      keywords: ['cake', 'dessert', 'sweet'],
-      confidence: 0.8
-    },
-    // サンドイッチ系
-    {
-      keywords: ['sandwich', 'bread', 'food'],
-      confidence: 0.75
-    },
-    // サラダ系
-    {
-      keywords: ['salad', 'vegetable', 'healthy'],
-      confidence: 0.7
-    },
-    // パンケーキ系
-    {
-      keywords: ['pancake', 'breakfast', 'syrup'],
-      confidence: 0.8
-    },
-    // 一般的な食べ物（低信頼度）
-    {
-      keywords: ['food', 'dish'],
-      confidence: 0.4
-    }
-  ]
-  
-  const patternIndex = hashSum % analysisPatterns.length
-  const selected = analysisPatterns[patternIndex]
-  
-  console.log(`🎲 モック解析 (一貫性): ${selected.keywords.join(', ')} (信頼度: ${selected.confidence})`)
-  
-  return {
-    detectedItems: selected.keywords,
-    confidence: selected.confidence
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -179,7 +125,6 @@ export async function POST(request: NextRequest) {
         if (textResult?.textAnnotations && textResult.textAnnotations[0]) {
           const detectedText = textResult.textAnnotations[0].description || ''
           const foodKeywords = [
-            'ケーキ', 'チョコレート', 'パンケーキ', 'サンドイッチ', 'サラダ', 'コーヒー', 'ティラミス',
             'cake', 'chocolate', 'pancake', 'sandwich', 'salad', 'coffee', 'tiramisu', 'pasta', 'pizza'
           ]
           
@@ -211,8 +156,7 @@ export async function POST(request: NextRequest) {
         
         // 食べ物関連キーワードの優先度付け
         const foodRelatedKeywords = [
-          'cake', 'chocolate', 'dessert', 'sweet', 'food', 'dish', 'plate',
-          'ケーキ', 'チョコレート', 'デザート', '甘い', '食べ物', '料理', '皿'
+          'cake', 'chocolate', 'dessert', 'sweet', 'food', 'dish', 'plate'
         ]
         
         if (allDetectedItems.length > 0) {
@@ -255,11 +199,10 @@ export async function POST(request: NextRequest) {
           code: visionError.code
         })
         
-        // フォールバックでモックデータを使用
-        const mockResult = mockImageAnalysis(imageData)
-        detectedItems = mockResult.detectedItems
-        confidence = mockResult.confidence
-        console.log('🔄 Vision APIエラー - モックデータにフォールバック:', detectedItems)
+        // Vision APIエラー時は結果なし
+        detectedItems = []
+        confidence = 0
+        console.log('🔄 Vision APIエラー - 結果なし')
       }
     } else {
       console.log('⚠️ Vision API環境変数が未設定:', {
@@ -268,11 +211,10 @@ export async function POST(request: NextRequest) {
         hasPrivateKey: !!process.env.GOOGLE_CLOUD_PRIVATE_KEY
       })
       
-      // モックデータ
-      const mockResult = mockImageAnalysis(imageData)
-      detectedItems = mockResult.detectedItems
-      confidence = mockResult.confidence
-      console.log('🔮 モックデータを使用中:', detectedItems)
+      // Vision API未設定時は結果なし
+      detectedItems = []
+      confidence = 0
+      console.log('🔮 Vision API未設定 - 結果なし')
     }
 
     let suggestedDishes: any[] = []
@@ -299,8 +241,6 @@ export async function POST(request: NextRequest) {
           'round', 'square', 'smooth', 'rough', 'soft', 'hard', 'hot', 'cold',
           // 場所・状況関連
           'table', 'restaurant', 'kitchen', 'eating', 'delicious', 'tasty', 'fresh',
-          // 日本語汎用キーワード
-          '料理', '食べ物', 'メニュー', '美味しい', '新鮮', '温かい', '冷たい', '白い', '黒い', '赤い', '緑',
           // その他汎用的すぎるもの
           'night', 'day', 'indoor', 'outdoor', 'person', 'hand', 'finger', 'wood', 'metal', 'glass'
         ]
@@ -488,30 +428,8 @@ export async function POST(request: NextRequest) {
         console.log(`✅ ${suggestedDishes.length}件の料理が見つかりました`)
       }
     } else {
-      console.log('⚠️ Supabase未設定のため、モック料理データを使用')
-      // モック料理データ（検出キーワードに関係なく表示）
-      suggestedDishes = [
-        {
-          id: 'mock-1',
-          name: 'チョコレートケーキ',
-          description: '濃厚なチョコレートの風味が楽しめるケーキです',
-          price: 450,
-          category: 'デザート',
-          ingredients: ['チョコレート', '小麦粉', '卵', 'バター'],
-          allergens: ['小麦', '卵', '乳'],
-          chef_comment: '当店自慢の濃厚チョコレートケーキです'
-        },
-        {
-          id: 'mock-2',
-          name: 'ブレンドコーヒー',
-          description: '香り高いオリジナルブレンドコーヒー',
-          price: 350,
-          category: 'ドリンク',
-          ingredients: ['コーヒー豆'],
-          allergens: [],
-          chef_comment: '厳選した豆を使用した自慢のブレンドです'
-        }
-      ]
+      console.log('⚠️ Supabase未設定 - 結果なし')
+      suggestedDishes = []
     }
 
     const result: ImageAnalysisResult = {

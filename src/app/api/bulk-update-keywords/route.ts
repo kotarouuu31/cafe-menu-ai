@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AutoKeywordGenerator } from '@/lib/keyword-generator'
 import { createClient } from '@supabase/supabase-js'
-import { withErrorHandler } from '@/lib/error-handler'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,7 +40,6 @@ async function handleBulkUpdateKeywords(req: NextRequest) {
 
         const updateData = {
           keywords: fallbackResult.keywords,
-          visual_keywords: fallbackResult.visual_keywords,
           updated_at: new Date().toISOString()
         }
 
@@ -63,7 +61,6 @@ async function handleBulkUpdateKeywords(req: NextRequest) {
           dishName: dish.name,
           category: dish.category,
           keywords: updateData.keywords,
-          visual_keywords: updateData.visual_keywords,
           status: 'success'
         })
 
@@ -103,4 +100,4 @@ async function handleBulkUpdateKeywords(req: NextRequest) {
   }
 }
 
-export const POST = withErrorHandler(handleBulkUpdateKeywords)
+export const POST = handleBulkUpdateKeywords

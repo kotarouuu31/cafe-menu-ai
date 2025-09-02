@@ -46,7 +46,6 @@ export async function POST() {
           ingredients: props.Ingredients?.multi_select?.map(item => item.name) || [],
           allergens: props.Allergens?.multi_select?.map(item => item.name) || [],
           keywords: props.Keywords?.multi_select?.map(item => item.name) || [],
-          visual_keywords: props.VisualKeywords?.multi_select?.map(item => item.name) || [],
           available: props.Available?.checkbox || true,
           seasonal: props.Seasonal?.checkbox || false,
           popular: props.Popular?.checkbox || false,

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AutoKeywordGenerator } from '@/lib/keyword-generator'
 import { createClient } from '@supabase/supabase-js'
-import { withErrorHandler } from '@/lib/error-handler'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -66,4 +65,4 @@ async function handleGenerateKeywords(req: NextRequest) {
   }
 }
 
-export const POST = withErrorHandler(handleGenerateKeywords)
+export const POST = handleGenerateKeywords

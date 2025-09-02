@@ -96,60 +96,14 @@ export class AutoKeywordGenerator {
     return categoryMap[category] || ['dish']
   }
 
-  /**
-   * 英語→日本語マッピング辞書
-   */
-  private getJapaneseMapping(englishTerm: string): string[] {
-    const mapping: { [key: string]: string[] } = {
-      'sandwich': ['サンドイッチ', 'パン', '軽食'],
-      'bread': ['パン', '食パン', 'ベーカリー'],
-      'cake': ['ケーキ', 'デザート', 'スイーツ'],
-      'chocolate': ['チョコレート', 'チョコ', 'カカオ'],
-      'coffee': ['コーヒー', 'カフェ', 'エスプレッソ'],
-      'salad': ['サラダ', '野菜', 'ヘルシー'],
-      'pasta': ['パスタ', '麺類', 'イタリアン'],
-      'pizza': ['ピザ', 'イタリアン', 'チーズ'],
-      'burger': ['ハンバーガー', 'バーガー', 'ファストフード'],
-      'soup': ['スープ', '汁物', 'ポタージュ'],
-      'meat': ['肉', 'ミート', 'プロテイン'],
-      'fish': ['魚', 'シーフード', '魚介'],
-      'vegetable': ['野菜', 'ベジタブル', 'ヘルシー'],
-      'fruit': ['フルーツ', '果物', 'ビタミン'],
-      'cheese': ['チーズ', 'チーズ系', '乳製品'],
-      'cream': ['クリーム', 'クリーミー', '生クリーム']
-    }
-    return mapping[englishTerm] || []
-  }
 
   /**
-   * 料理名ベースキーワード生成（英語のみ）
+   * 料理名ベースキーワード生成（Vision API結果に依存）
    */
   private getNameBasedKeywords(dishName: string): string[] {
-    const keywords: string[] = []
-    
-    // 料理名に含まれる要素を分析
-    const namePatterns = [
-      { pattern: /ティラミス/, keywords: ['tiramisu', 'mascarpone', 'coffee', 'ladyfinger', 'cocoa', 'italian dessert'] },
-      { pattern: /アボカド/, keywords: ['avocado', 'toast', 'healthy', 'green', 'nutritious'] },
-      { pattern: /ガーリック/, keywords: ['garlic', 'shrimp', 'butter', 'seafood', 'aromatic'] },
-      { pattern: /シュリンプ/, keywords: ['shrimp', 'seafood', 'garlic', 'butter', 'prawns'] },
-      { pattern: /ケーキ/, keywords: ['cake', 'dessert', 'sweet', 'pastry'] },
-      { pattern: /サンドイッチ/, keywords: ['sandwich', 'bread', 'light meal', 'lunch'] },
-      { pattern: /コーヒー/, keywords: ['coffee', 'drink', 'caffeine', 'beverage'] },
-      { pattern: /サラダ/, keywords: ['salad', 'vegetables', 'healthy', 'fresh'] },
-      { pattern: /パスタ/, keywords: ['pasta', 'italian', 'noodles', 'carbohydrate'] },
-      { pattern: /ピザ/, keywords: ['pizza', 'italian', 'cheese', 'baked'] },
-      { pattern: /ハンバーガー/, keywords: ['burger', 'fast food', 'meat', 'sandwich'] },
-      { pattern: /スープ/, keywords: ['soup', 'liquid', 'warm', 'broth'] }
-    ]
-
-    namePatterns.forEach(({ pattern, keywords: patternKeywords }) => {
-      if (pattern.test(dishName)) {
-        keywords.push(...patternKeywords)
-      }
-    })
-
-    return keywords
+    // Vision APIが英語キーワードを検出するため、
+    // 日本語料理名からの推測は不要
+    return []
   }
 
 
@@ -183,16 +137,3 @@ export class AutoKeywordGenerator {
   }
 }
 
-/**
- * 既存データのキーワード一括更新
- */
-export async function updateAllDishKeywords() {
-  const generator = new AutoKeywordGenerator()
-  
-  // Supabaseから全料理データを取得
-  // 各料理の画像を処理してキーワード生成
-  // データベース更新
-  
-  console.log('キーワード一括更新を開始します...')
-  // 実装は次のステップで
-}

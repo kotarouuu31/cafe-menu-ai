@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { withErrorHandler } from '@/lib/error-handler'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -145,4 +144,4 @@ async function handleDeleteDish(req: NextRequest) {
   }
 }
 
-export const DELETE = withErrorHandler(handleDeleteDish)
+export const DELETE = handleDeleteDish

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { withErrorHandler } from '@/lib/error-handler'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +21,6 @@ async function handleGetDishes(req: NextRequest) {
         price,
         description,
         keywords,
-        visual_keywords,
         image_urls,
         available,
         created_at,
@@ -52,4 +50,4 @@ async function handleGetDishes(req: NextRequest) {
   }
 }
 
-export const GET = withErrorHandler(handleGetDishes)
+export const GET = handleGetDishes

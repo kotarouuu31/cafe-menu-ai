@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withErrorHandler } from '@/lib/error-handler'
 
 const NOTION_TOKEN = process.env.NOTION_TOKEN!
 const NOTION_DISHES_DATABASE_ID = process.env.NOTION_DISHES_DATABASE_ID!
@@ -185,4 +184,4 @@ async function handleCreateNotionDish(req: NextRequest) {
   }
 }
 
-export const POST = withErrorHandler(handleCreateNotionDish)
+export const POST = handleCreateNotionDish

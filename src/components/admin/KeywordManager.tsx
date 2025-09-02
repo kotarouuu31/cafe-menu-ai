@@ -5,7 +5,6 @@ import { Loader2, Wand2, Upload, RefreshCw } from 'lucide-react'
 
 interface KeywordResult {
   keywords: string[]
-  visual_keywords: string[]
   confidence: number
 }
 
@@ -130,7 +129,6 @@ export function KeywordManager() {
         if (result.success) {
           setPreviewResult({
             keywords: result.keywords,
-            visual_keywords: result.visual_keywords || [],
             confidence: result.confidence
           })
           toast.success(`${selectedDish.name}のキーワードを生成・更新しました！`)
@@ -284,14 +282,6 @@ export function KeywordManager() {
                   </div>
                 </div>
                 
-                <div>
-                  <h4 className="font-semibold mb-2">視覚的キーワード:</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {(previewResult.visual_keywords || []).map((keyword, index) => (
-                      <Badge key={index} variant="secondary">{keyword}</Badge>
-                    ))}
-                  </div>
-                </div>
                 
                 <div className="text-sm text-muted-foreground">
                   信頼度: {Math.round(previewResult.confidence * 100)}%

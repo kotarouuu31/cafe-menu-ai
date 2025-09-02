@@ -6,7 +6,6 @@ export interface Dish {
   ingredients: string[]
   allergens: string[]
   keywords: string[]
-  visual_keywords?: string[]
   imageUrls: string[]
   price?: number | null
   category: string
@@ -40,7 +39,6 @@ export interface DishDB {
   ingredients: string // JSON string
   allergens: string   // JSON string
   keywords: string    // JSON string
-  visual_keywords?: string // JSON string
   imageUrls: string   // JSON string
   price?: number | null
   category: string
@@ -64,7 +62,6 @@ export interface CreateDishInput {
   ingredients: string[]
   allergens: string[]
   keywords: string[]
-  visual_keywords?: string[]
   imageUrls: string[]
   price?: number | null
   category: string

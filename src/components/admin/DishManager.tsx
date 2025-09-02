@@ -63,7 +63,6 @@ interface Dish {
   price: number
   description: string
   keywords: string[]
-  visual_keywords: string[]
   image_urls: string[]
   available: boolean
   created_at: string
@@ -132,7 +131,7 @@ export function DishManager() {
 
   const hasProblematicKeywords = (dish: Dish) => {
     const problematicKeywords = ['white', 'black', 'red', 'blue', 'green', 'yellow', '白い', '黒い', '赤い']
-    const allKeywords = [...(dish.keywords || []), ...(dish.visual_keywords || [])]
+    const allKeywords = [...(dish.keywords || [])]
     return allKeywords.some(keyword => 
       problematicKeywords.some(prob => keyword.toLowerCase().includes(prob.toLowerCase()))
     )
@@ -224,19 +223,6 @@ export function DishManager() {
                         </div>
                       )}
                       
-                      {dish.visual_keywords && dish.visual_keywords.length > 0 && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-700">ビジュアルキーワード: </span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {dish.visual_keywords.slice(0, 6).map((keyword, index) => (
-                              <Badge key={index} variant="secondary">{keyword}</Badge>
-                            ))}
-                            {dish.visual_keywords.length > 6 && (
-                              <Badge variant="secondary">+{dish.visual_keywords.length - 6}個</Badge>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
                     
                     <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">

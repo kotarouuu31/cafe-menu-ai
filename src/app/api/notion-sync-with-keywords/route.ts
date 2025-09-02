@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AutoKeywordGenerator } from '@/lib/keyword-generator'
 import { createClient } from '@supabase/supabase-js'
-import { withErrorHandler } from '@/lib/error-handler'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -53,7 +52,6 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
         const dishData = await parseNotionDish(dish)
         
         let keywords = dishData.keywords || []
-        let visual_keywords = dishData.visual_keywords || []
 
         // キーワード自動生成が有効な場合
         if (generateKeywords && dishData.image_url) {
@@ -73,11 +71,9 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
               )
               
               keywords = generatedKeywords.keywords
-              visual_keywords = []
               
               console.log(`✅ ${dishData.name} キーワード生成完了:`, {
                 keywords: keywords.slice(0, 5),
-                visual_keywords: visual_keywords.slice(0, 3),
                 confidence: generatedKeywords.confidence
               })
             }
@@ -91,7 +87,6 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
               dishData.category
             )
             keywords = fallbackResult.keywords
-            visual_keywords = []
           }
         }
 
@@ -112,7 +107,6 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
             allergens: dishData.allergens,
             nutritional_info: dishData.nutritional_info,
             keywords: keywords,
-            visual_keywords: visual_keywords,
             image_urls: dishData.image_urls,
             available: dishData.available,
             seasonal: dishData.seasonal,
@@ -136,7 +130,6 @@ async function handleNotionSyncWithKeywords(req: NextRequest) {
             status: 'success',
             keywords_generated: generateKeywords,
             keywords_count: keywords.length,
-            visual_keywords_count: visual_keywords.length
           })
         }
 
@@ -182,7 +175,6 @@ async function parseNotionDish(dish: any) {
     allergens: properties.Allergens?.multi_select?.map((item: any) => item.name) || [],
     nutritional_info: { calories: properties.Calories?.number || 0 },
     keywords: properties.Keywords?.multi_select?.map((item: any) => item.name) || [],
-    visual_keywords: properties.VisualKeywords?.multi_select?.map((item: any) => item.name) || [],
     image_urls: properties.Images?.files?.map((file: any) => 
       file.type === 'external' ? file.external.url : file.file.url
     ) || [],
@@ -195,4 +187,4 @@ async function parseNotionDish(dish: any) {
   }
 }
 
-export const POST = withErrorHandler(handleNotionSyncWithKeywords)
+export const POST = handleNotionSyncWithKeywords
